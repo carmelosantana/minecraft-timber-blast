@@ -1,0 +1,51 @@
+# TimberBlast configuration
+#
+# Every key below is validated on load. An out-of-range or unknown value logs a
+# warning naming the key, the offending value, and the default it was replaced
+# with -- a typo in this file degrades gracefully to defaults, it never stops the
+# plugin from starting.
+
+fell:
+  # Hard ceiling on how many logs a single swing may fell. Protects the server
+  # from a pathological mega-tree. Valid range: 1-4096.
+  max-blocks: 256
+  # Horizontal search radius, in blocks, from the struck log. Valid range: 1-64.
+  max-radius: 8
+  # Vertical search height, in blocks, above the struck log. Valid range: 1-256.
+  max-height: 32
+  # Whether leaves broken along with the tree drop their items (saplings, apples,
+  # sticks). Set false to fell without the leaf litter.
+  drop-leaves: true
+
+fuel:
+  # Item consumed to power one fell, resolved by name against the material
+  # registry. An unknown name falls back to GUNPOWDER.
+  material: GUNPOWDER
+  # How many of that item one fell consumes. Valid range: 1-64.
+  amount: 1
+
+explosion:
+  # Explosion power of the blast. For reference, TNT is 4.0. Valid range: 0.0-10.0.
+  power: 2.0
+  # Whether the blast is allowed to break terrain. Off by default so felling a
+  # tree does not crater the ground under it.
+  block-damage: false
+  # Multiplier applied to the knockback the wielder receives. 0.0 removes the
+  # shove entirely. The wielder never takes damage from their own blast.
+  # Valid range: 0.0-5.0.
+  knockback-multiplier: 1.0
+
+coal:
+  # Whether the log actually struck is charred into fuel instead of dropping as a
+  # log. The rest of the tree always drops normally.
+  enabled: true
+  # Item the struck log chars into, resolved by name against the material
+  # registry. An unknown name falls back to COAL.
+  material: COAL
+
+scorch:
+  # Whether the ground around the felled tree is visually scorched.
+  enabled: true
+  # Whether the scorch places real fire that can spread. Off by default -- leaving
+  # this on lets a fell burn down a forest.
+  spread: false

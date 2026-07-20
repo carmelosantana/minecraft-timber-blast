@@ -20,4 +20,15 @@ import java.util.List;
  * @param truncated whether the scan hit its block cap and left part of the tree standing
  */
 public record ScanResult(List<BlockPos> logs, List<BlockPos> leaves, boolean truncated) {
+
+    /**
+     * Defensively copies both lists, so a {@code ScanResult} is immutable no matter which
+     * caller built it and neither list can be null.
+     *
+     * @throws NullPointerException if either list, or any element of either, is null
+     */
+    public ScanResult {
+        logs = List.copyOf(logs);
+        leaves = List.copyOf(leaves);
+    }
 }

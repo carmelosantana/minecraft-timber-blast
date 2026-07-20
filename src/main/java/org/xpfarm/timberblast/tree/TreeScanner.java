@@ -46,7 +46,9 @@ public final class TreeScanner {
      * @param origin    the struck block; always {@code logs.get(0)} when it is a log
      * @param query     the world view
      * @param maxBlocks cap on the number of <em>logs</em>; reaching it stops the scan and
-     *                  sets {@link ScanResult#truncated()}, keeping the leaves found so far
+     *                  sets {@link ScanResult#truncated()}, keeping the leaves found so far.
+     *                  Values below {@code 1} are treated as {@code 1}, since the origin log
+     *                  is always collected and a cap of zero could not be honoured anyway
      * @param maxRadius bound on {@code |x - origin.x|} and {@code |z - origin.z|}
      * @param maxHeight bound on {@code |y - origin.y|}
      * @return the blocks to fell; empty logs and leaves if {@code origin} is not a log
@@ -55,6 +57,11 @@ public final class TreeScanner {
         if (query.kindAt(origin) != BlockKind.LOG) {
             return new ScanResult(List.of(), List.of(), false);
         }
+
+        // The origin is always collected, so a cap below 1 cannot be honoured; normalising
+        // here keeps "cap exceeded" and "truncated" in agreement instead of silently
+        // returning one log while claiming the result is complete.
+        int logCap = Math.max(1, maxBlocks);
 
         List<BlockPos> logs = new ArrayList<>();
         Set<BlockPos> visitedLogs = new HashSet<>();
@@ -79,7 +86,7 @@ public final class TreeScanner {
                     case LOG -> {
                         // Finish this block's neighbours before stopping, so the leaves
                         // around the last log we did take are still felled with it.
-                        if (logs.size() >= maxBlocks) {
+                        if (logs.size() >= logCap) {
                             truncated = true;
                         } else {
                             logs.add(neighbour);

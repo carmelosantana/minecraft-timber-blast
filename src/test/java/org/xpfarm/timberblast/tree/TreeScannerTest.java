@@ -150,6 +150,25 @@ class TreeScannerTest {
     }
 
     @Test
+    void maxBlocksBelowOne_isTreatedAsOneAndStillFlagsTruncation() {
+        ScanResult result = scanner.scan(at(0, 0, 0), new MapBlockQuery().trunk(0, 0, 0, 5),
+                0, MAX_RADIUS, MAX_HEIGHT);
+
+        assertEquals(List.of(at(0, 0, 0)), result.logs(), "the origin log is always collected");
+        assertTrue(result.truncated(),
+                "a cap the result could not honour must never claim the tree came down whole");
+    }
+
+    @Test
+    void maxBlocksBelowOne_onALoneLogIsNotTruncated() {
+        ScanResult result = scanner.scan(at(0, 0, 0), new MapBlockQuery().put(0, 0, 0, BlockKind.LOG),
+                -5, MAX_RADIUS, MAX_HEIGHT);
+
+        assertEquals(List.of(at(0, 0, 0)), result.logs());
+        assertFalse(result.truncated(), "nothing was left standing, so nothing was truncated");
+    }
+
+    @Test
     void truncatedScan_stillReturnsTheLeavesFoundSoFar() {
         MapBlockQuery world = new MapBlockQuery()
                 .trunk(0, 0, 0, 10)
@@ -173,6 +192,48 @@ class TreeScannerTest {
 
         assertEquals(List.of(at(0, 0, 0), at(1, 0, 0), at(2, 0, 0)), result.logs());
         assertFalse(result.truncated(), "a bound is not a cap; hitting it does not truncate");
+    }
+
+    @Test
+    void blocksBeyondMaxRadius_areExcludedAlongNegativeX() {
+        MapBlockQuery world = new MapBlockQuery()
+                .put(0, 0, 0, BlockKind.LOG)
+                .put(-1, 0, 0, BlockKind.LOG)
+                .put(-2, 0, 0, BlockKind.LOG)
+                .put(-3, 0, 0, BlockKind.LOG);
+
+        ScanResult result = scanner.scan(at(0, 0, 0), world, MAX_BLOCKS, 2, MAX_HEIGHT);
+
+        assertEquals(List.of(at(0, 0, 0), at(-1, 0, 0), at(-2, 0, 0)), result.logs(),
+                "the radius bound is an absolute distance, so it must hold west of the origin too");
+    }
+
+    @Test
+    void blocksBeyondMaxRadius_areExcludedAlongPositiveZ() {
+        MapBlockQuery world = new MapBlockQuery()
+                .put(0, 0, 0, BlockKind.LOG)
+                .put(0, 0, 1, BlockKind.LOG)
+                .put(0, 0, 2, BlockKind.LOG)
+                .put(0, 0, 3, BlockKind.LOG);
+
+        ScanResult result = scanner.scan(at(0, 0, 0), world, MAX_BLOCKS, 2, MAX_HEIGHT);
+
+        assertEquals(List.of(at(0, 0, 0), at(0, 0, 1), at(0, 0, 2)), result.logs(),
+                "maxRadius bounds z as well as x, or a branch eats sideways past the limit");
+    }
+
+    @Test
+    void blocksBeyondMaxRadius_areExcludedAlongNegativeZ() {
+        MapBlockQuery world = new MapBlockQuery()
+                .put(0, 0, 0, BlockKind.LOG)
+                .put(0, 0, -1, BlockKind.LOG)
+                .put(0, 0, -2, BlockKind.LOG)
+                .put(0, 0, -3, BlockKind.LOG);
+
+        ScanResult result = scanner.scan(at(0, 0, 0), world, MAX_BLOCKS, 2, MAX_HEIGHT);
+
+        assertEquals(List.of(at(0, 0, 0), at(0, 0, -1), at(0, 0, -2)), result.logs(),
+                "the z bound is an absolute distance, so it must hold north of the origin too");
     }
 
     @Test

@@ -10,7 +10,11 @@
 package org.xpfarm.timberblast;
 
 import org.bukkit.Material;
+import org.bukkit.damage.DamageSource;
+import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.xpfarm.timberblast.config.ConfigSource;
@@ -19,9 +23,12 @@ import org.xpfarm.timberblast.fell.BlockTypes;
 import org.xpfarm.timberblast.fell.FellExecutor;
 import org.xpfarm.timberblast.listener.TimberBlastListener;
 import org.xpfarm.timberblast.listener.WielderDamageListener;
+import org.xpfarm.timberblast.testsupport.FakeBlocks;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -173,7 +180,71 @@ class TimberBlastServicesTest {
         // around a bare FellAction, which has no BlastGuard to share -- the exact miswiring
         // that kills the wielder with their own axe. That it returns here proves the
         // executor-taking factory was used.
+        //
+        // This is a type and construction check only. It does NOT prove the pairing; see
+        // theDamageListenerWatchesThisServicesOwnExecutor for that.
         assertNotNull(((TimberBlastListener) listeners.get(0)).damageListener());
+    }
+
+    /**
+     * The wielder-dies-to-their-own-axe invariant, asserted behaviourally.
+     *
+     * <p>This is the test the previous round did not have, and its absence was not an
+     * oversight in the code -- it was an oversight in the assertion. {@code listenersSharePairing}
+     * above proves only that <em>a</em> {@link WielderDamageListener} sits at index 1. Swapping
+     * the constructor's {@code all.add(trigger.damageListener())} for a listener derived from a
+     * second, unrelated {@link FellExecutor} -- the exact miswiring both class notes warn about
+     * -- left the whole suite green, because a foreign listener is still a
+     * {@code WielderDamageListener} and the trigger listener still mints one on demand.
+     *
+     * <p>So this asserts the property itself: arm the guard of the executor this instance
+     * actually fells with, fire a real explosion damage event at the listener this instance
+     * actually registers, and require the damage to be suppressed. A listener watching any
+     * other guard sees a guard nobody armed and lets the wielder take the full 12.0.
+     */
+    @Test
+    @DisplayName("the registered damage listener watches the guard of the executor that fells")
+    void theDamageListenerWatchesThisServicesOwnExecutor() {
+        TimberBlastServices services = services(configWithMaxBlocks(100), List.of());
+        UUID wielder = UUID.fromString("00000000-0000-0000-0000-00000000beef");
+        Player victim = FakeBlocks.stub(Player.class, "the wielder",
+                Map.of("getUniqueId", wielder));
+        DamageSource source = FakeBlocks.stub(DamageSource.class, "the blast", Map.of());
+        EntityDamageEvent event =
+                new EntityDamageEvent(victim, DamageCause.BLOCK_EXPLOSION, source, 12.0);
+
+        // Arm the guard of this services instance's executor -- nothing else.
+        services.executor().guard().begin(wielder);
+        ((WielderDamageListener) services.listeners().get(1)).onEntityDamage(event);
+
+        assertEquals(0.0, event.getDamage(), 1.0E-9,
+                "the registered damage listener must watch the executor this instance fells "
+                        + "with; any other guard is never armed and the wielder dies to their "
+                        + "own axe");
+    }
+
+    /**
+     * The same property stated the other way: suppression is specific to the armed guard, not
+     * something a {@code WielderDamageListener} does for any blast at all. Without this, a
+     * listener that suppressed unconditionally would pass the test above.
+     */
+    @Test
+    @DisplayName("an unrelated executor's blast window does not protect this wielder")
+    void aForeignGuardDoesNotProtectTheWielder() {
+        TimberBlastServices services = services(configWithMaxBlocks(100), List.of());
+        TimberBlastServices unrelated = services(configWithMaxBlocks(100), List.of());
+        UUID wielder = UUID.fromString("00000000-0000-0000-0000-00000000beef");
+        Player victim = FakeBlocks.stub(Player.class, "the wielder",
+                Map.of("getUniqueId", wielder));
+        DamageSource source = FakeBlocks.stub(DamageSource.class, "the blast", Map.of());
+        EntityDamageEvent event =
+                new EntityDamageEvent(victim, DamageCause.BLOCK_EXPLOSION, source, 12.0);
+
+        unrelated.executor().guard().begin(wielder);
+        ((WielderDamageListener) services.listeners().get(1)).onEntityDamage(event);
+
+        assertEquals(12.0, event.getDamage(), 1.0E-9,
+                "suppression must be tied to the guard that was armed, not unconditional");
     }
 
     @Test

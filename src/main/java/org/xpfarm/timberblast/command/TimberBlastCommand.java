@@ -48,8 +48,67 @@ public final class TimberBlastCommand implements CommandExecutor, TabCompleter {
      */
     private static final Logger LOG = Logger.getLogger(TimberBlastCommand.class.getName());
 
+    /**
+     * The four things this command genuinely needs a running server for, behind one
+     * interface.
+     *
+     * <p>Everything else here -- which player receives the axe, whether a full inventory
+     * drops it, what an unmatched name reports -- is a decision, and a decision reachable
+     * only through {@code Bukkit}'s statics is a decision no test can check. That is not
+     * hypothetical: with the statics inlined, rewriting {@code case GIVE_NAMED} to hand the
+     * axe to the sender instead of the named player built green, and so did deleting the
+     * drop-at-feet loop entirely.
+     */
+    public interface ServerAccess {
+
+        /** The online player with exactly this name, or {@code null}. */
+        Player playerExact(String name);
+
+        /** Every online player's name. */
+        List<String> onlineNames();
+
+        /**
+         * Adds {@code stack} to {@code player}'s inventory.
+         *
+         * @return what did not fit, keyed by the source slot, empty when everything fit
+         */
+        Map<Integer, ItemStack> addToInventory(Player player, ItemStack stack);
+
+        /** Drops {@code stack} at {@code player}'s feet. */
+        void dropAtFeet(Player player, ItemStack stack);
+
+        /** The production implementation, reaching through {@code Bukkit}. */
+        ServerAccess BUKKIT = new ServerAccess() {
+
+            @Override
+            public Player playerExact(String name) {
+                return Bukkit.getPlayerExact(name);
+            }
+
+            @Override
+            public List<String> onlineNames() {
+                List<String> names = new ArrayList<>();
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    names.add(online.getName());
+                }
+                return names;
+            }
+
+            @Override
+            public Map<Integer, ItemStack> addToInventory(Player player, ItemStack stack) {
+                return player.getInventory().addItem(stack);
+            }
+
+            @Override
+            public void dropAtFeet(Player player, ItemStack stack) {
+                player.getWorld().dropItemNaturally(player.getLocation(), stack);
+            }
+        };
+    }
+
     private final Supplier<ItemStack> axeFactory;
     private final Supplier<List<String>> reloadAction;
+    private final ServerAccess server;
 
     /**
      * @param axeFactory   mints one Timber Blast axe, in production {@code TimberBlastItem::create}
@@ -57,8 +116,17 @@ public final class TimberBlastCommand implements CommandExecutor, TabCompleter {
      *                     produced, empty when the config was clean
      */
     public TimberBlastCommand(Supplier<ItemStack> axeFactory, Supplier<List<String>> reloadAction) {
+        this(axeFactory, reloadAction, ServerAccess.BUKKIT);
+    }
+
+    /**
+     * @param server the server operations to use; tests substitute a recording double
+     */
+    public TimberBlastCommand(Supplier<ItemStack> axeFactory, Supplier<List<String>> reloadAction,
+                              ServerAccess server) {
         this.axeFactory = Objects.requireNonNull(axeFactory, "axeFactory");
         this.reloadAction = Objects.requireNonNull(reloadAction, "reloadAction");
+        this.server = Objects.requireNonNull(server, "server");
     }
 
     @Override
@@ -82,13 +150,13 @@ public final class TimberBlastCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                       @NotNull String label, @NotNull String[] args) {
-        return CommandResolver.complete(args, onlineNames(), sender::hasPermission);
+        return CommandResolver.complete(args, server.onlineNames(), sender::hasPermission);
     }
 
     private void giveNamed(CommandSender sender, String typed) {
         Player target = resolveTarget(typed);
         if (target == null) {
-            error(sender, CommandResolver.noSuchPlayerMessage(typed, onlineNames()));
+            error(sender, CommandResolver.noSuchPlayerMessage(typed, server.onlineNames()));
             return;
         }
         give(sender, target);
@@ -141,40 +209,31 @@ public final class TimberBlastCommand implements CommandExecutor, TabCompleter {
      * Adds the axe to the player's inventory, dropping at their feet whatever does not
      * fit. A full inventory must never silently swallow the item an operator just issued.
      */
-    private static void giveOrDrop(Player player, ItemStack stack) {
-        Map<Integer, ItemStack> leftover = player.getInventory().addItem(stack);
+    private void giveOrDrop(Player player, ItemStack stack) {
+        Map<Integer, ItemStack> leftover = server.addToInventory(player, stack);
         for (ItemStack overflow : leftover.values()) {
-            player.getWorld().dropItemNaturally(player.getLocation(), overflow);
+            server.dropAtFeet(player, overflow);
         }
     }
 
     /**
-     * The online player matching {@code typed}, or {@code null}. Tries the exact name and
-     * its Floodgate-prefixed form first, then a case-insensitive sweep -- which also covers
-     * a server that has changed Floodgate's username prefix away from the default.
+     * The online player matching {@code typed}, or {@code null}.
+     *
+     * <p>Tries the exact name and then its Floodgate-prefixed form. There is deliberately no
+     * case-insensitive sweep behind these: {@code Bukkit.getPlayerExact} is documented
+     * case-insensitive already ("Gets the player with the exact given name, case
+     * insensitive"), so the sweep this used to run was a second pass over the same candidate
+     * list applying a weaker match than the lookup it was backing up. It could never find a
+     * player the first loop had not, and the comment claiming it covered a non-default
+     * Floodgate prefix was wrong -- it iterated the same prefixed candidates.
      */
-    private static Player resolveTarget(String typed) {
+    private Player resolveTarget(String typed) {
         for (String candidate : CommandResolver.targetNameCandidates(typed)) {
-            Player exact = Bukkit.getPlayerExact(candidate);
+            Player exact = server.playerExact(candidate);
             if (exact != null) {
                 return exact;
             }
         }
-        for (String candidate : CommandResolver.targetNameCandidates(typed)) {
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                if (online.getName().equalsIgnoreCase(candidate)) {
-                    return online;
-                }
-            }
-        }
         return null;
-    }
-
-    private static List<String> onlineNames() {
-        List<String> names = new ArrayList<>();
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            names.add(online.getName());
-        }
-        return names;
     }
 }

@@ -90,17 +90,14 @@ public final class TimberBlastPlugin extends JavaPlugin {
             services = new TimberBlastServices(startingConfig,
                     stack -> item != null && item.isTimberBlast(stack),
                     BlockTypes.SERVER_TAGS, extra);
-            int count = services.registerOnce(
-                    listener -> getServer().getPluginManager().registerEvents(listener, this));
+            int count = TimberBlastLifecycle.registerListeners(
+                    services, getServer().getPluginManager(), this);
             getLogger().info("TimberBlast: registered " + count + " listeners.");
         });
 
-        // resendRecipes=false: no player is connected at enable time on a normal start, so
-        // there is no client recipe book to refresh. The reload path passes true; see
-        // reload().
         step("crafting recipe", () -> {
             if (item != null) {
-                item.registerRecipe(false);
+                item.registerRecipe();
             }
         });
 
@@ -123,34 +120,21 @@ public final class TimberBlastPlugin extends JavaPlugin {
     /**
      * Re-reads {@code config.yml} and applies it live.
      *
-     * <p>Invoked by {@code /timberblast reload}. Constructs no services and registers no
-     * listeners -- see the class note. The configuration is swapped only once it has fully
-     * parsed, so a failure part-way leaves the previously working settings in place.
+     * <p>Invoked by {@code /timberblast reload}. The sequence itself lives in
+     * {@link TimberBlastLifecycle#reload}, which is where it can be tested; what is left
+     * here is the two {@code JavaPlugin} calls it needs and the current services.
      *
      * @return the validation warnings this reload produced, in order; empty when the file
      *         was clean. The command reports these to the sender, so an operator fixing a
      *         typo sees the result in chat instead of having to open the server log.
      */
     public List<String> reload() {
-        reloadConfig();
-        List<String> warnings = new ArrayList<>();
-        Consumer<String> sink = message -> {
-            warnings.add(message);
-            warn(message);
-        };
-        TbConfig next = loadConfig(sink);
-        if (services != null) {
-            services.applyConfig(next);
-        }
-        // resendRecipes=true, unlike the enable path. Players are connected during a
-        // reload, and the single-argument add/remove forms leave every already-connected
-        // client holding the stale recipe in its book until it relogs. A reload that
-        // changed nothing about the recipe pays one cheap resend; a reload that fixed a
-        // broken recipe is visible immediately, which is the point of running it.
-        if (item != null) {
-            item.registerRecipe(true);
-        }
-        return List.copyOf(warnings);
+        return TimberBlastLifecycle.reload(
+                this::reloadConfig,
+                this::loadConfig,
+                services,
+                item == null ? null : item::registerRecipe,
+                this::warn);
     }
 
     private TbConfig loadConfig(Consumer<String> warn) {

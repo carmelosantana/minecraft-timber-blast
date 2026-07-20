@@ -167,19 +167,15 @@ No gates are withheld. Status is `active`; all twelve gates apply.
       `rg -n 'herobrinesystems' . --hidden -g '!target/**' -g '!.git/**'` returns only this
       checklist's own checkbox text — no real references.
 
-### Repository visibility — OPEN, blocks gate 10
+### Repository visibility — RESOLVED
 
-The repository is **`PRIVATE`** as of 2026-07-20. All ten sibling plugin repositories are
-`PUBLIC`. The agent created it private in error and `gh repo edit --visibility public` was
-blocked by the harness permission layer; the user's manual push did not change visibility.
+The repository is **`PUBLIC`**, verified 2026-07-20 via
+`gh repo view --json visibility`. It was created private in error at gate 2 and
+corrected by the user the same day.
 
-This must be resolved before gate 10. The updater downloads release assets unauthenticated,
-so a private repository fails updater enrollment even if every earlier gate is green. Fix:
-
-```bash
-gh repo edit carmelosantana/minecraft-timber-blast \
-  --visibility public --accept-visibility-change-consequences
-```
+Recorded because the failure mode is non-obvious: the updater downloads release assets
+unauthenticated, so a private repository fails gate 10 enrollment even when every
+earlier gate is green. New plugin repositories should be created public from the start.
 
 ## 3. Metadata
 

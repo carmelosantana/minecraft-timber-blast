@@ -59,6 +59,8 @@ public record TbConfig(
         FellSettings fell = new FellSettings(
                 ConfigValidator.requireInRange("fell.max-blocks",
                         source.getInt("fell.max-blocks", 256), 1, 4096, 256, warn),
+                ConfigValidator.requireInRange("fell.max-leaves",
+                        source.getInt("fell.max-leaves", 256), 0, 4096, 256, warn),
                 ConfigValidator.requireInRange("fell.max-radius",
                         source.getInt("fell.max-radius", 8), 1, 64, 8, warn),
                 ConfigValidator.requireInRange("fell.max-height",

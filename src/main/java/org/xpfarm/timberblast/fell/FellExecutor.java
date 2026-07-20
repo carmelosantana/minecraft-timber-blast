@@ -125,13 +125,7 @@ public final class FellExecutor implements FellAction {
         }
 
         if (cfg.fell().dropLeaves()) {
-            for (BlockPos leaf : scan.leaves()) {
-                // Step 5. Leaves go through the same cancellable event as the logs. Removing
-                // them unprotected would let a fully-vetoed fell still strip the canopy.
-                if (world.requestBreak(leaf)) {
-                    world.breakNaturally(leaf);
-                }
-            }
+            breakLeaves(scan.leaves(), world, cfg);
         }
 
         wielder.consumeFuel(fuel, cfg.fuel().amount());
@@ -178,6 +172,38 @@ public final class FellExecutor implements FellAction {
             broken++;
         }
         return broken;
+    }
+
+    /**
+     * Step 5. Offers each leaf for veto and breaks the survivors, stopping at
+     * {@code fell.max-leaves}.
+     *
+     * <p>The cap counts <em>offers</em>, not breaks, because the cost being bounded is the
+     * {@code BlockBreakEvent} dispatch itself: the event goes synchronously through every
+     * listening plugin on the server, and a logging plugin writes a row for each one. Counting
+     * breaks instead would let a claim that vetoes everything drive an unbounded number of
+     * dispatches, which is precisely the case the cap exists for. Since a break requires an
+     * offer, capping offers caps breaks too.
+     *
+     * <p>{@code fell.max-leaves: 0} therefore breaks no leaves at all. That overlaps with
+     * {@code fell.drop-leaves: false} in effect but not in intent -- this key is a cost
+     * ceiling, that one is a drops toggle -- so both are honoured independently.
+     *
+     * <p>Leaves go through the same cancellable event as the logs; removing them unprotected
+     * would let a fully-vetoed fell still strip the canopy.
+     */
+    private static void breakLeaves(List<BlockPos> leaves, FellWorld world, TbConfig cfg) {
+        int cap = cfg.fell().maxLeaves();
+        int offered = 0;
+        for (BlockPos leaf : leaves) {
+            if (offered >= cap) {
+                return;
+            }
+            offered++;
+            if (world.requestBreak(leaf)) {
+                world.breakNaturally(leaf);
+            }
+        }
     }
 
     /**

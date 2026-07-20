@@ -58,6 +58,7 @@ class TbConfigTest {
         TbConfig config = load(MapConfigSource.empty());
 
         assertEquals(256, config.fell().maxBlocks());
+        assertEquals(256, config.fell().maxLeaves());
         assertEquals(8, config.fell().maxRadius());
         assertEquals(32, config.fell().maxHeight());
         assertTrue(config.fell().dropLeaves());
@@ -79,6 +80,7 @@ class TbConfigTest {
     void configuredValues_areReadThroughUnchanged() {
         TbConfig config = load(MapConfigSource.empty()
                 .with("fell.max-blocks", 512)
+                .with("fell.max-leaves", 64)
                 .with("fell.max-radius", 12)
                 .with("fell.max-height", 48)
                 .with("fell.drop-leaves", false)
@@ -91,6 +93,7 @@ class TbConfigTest {
                 .with("coal.material", "CHARCOAL"));
 
         assertEquals(512, config.fell().maxBlocks());
+        assertEquals(64, config.fell().maxLeaves());
         assertEquals(12, config.fell().maxRadius());
         assertEquals(48, config.fell().maxHeight());
         assertFalse(config.fell().dropLeaves());
@@ -133,6 +136,9 @@ class TbConfigTest {
     private static Stream<Bound> bounds() {
         return Stream.of(
                 new Bound("fell.max-blocks", true, 1, 4096, 256, c -> (double) c.fell().maxBlocks()),
+                // Minimum 0, unlike every other bounded int here: "break no leaves at all" is
+                // a legitimate setting, whereas felling zero logs would just be a broken axe.
+                new Bound("fell.max-leaves", true, 0, 4096, 256, c -> (double) c.fell().maxLeaves()),
                 new Bound("fell.max-radius", true, 1, 64, 8, c -> (double) c.fell().maxRadius()),
                 new Bound("fell.max-height", true, 1, 256, 32, c -> (double) c.fell().maxHeight()),
                 new Bound("fuel.amount", true, 1, 64, 1, c -> (double) c.fuel().amount()),
@@ -262,6 +268,7 @@ class TbConfigTest {
     void everyRejectedValue_producesItsOwnWarning() {
         load(MapConfigSource.empty()
                 .with("fell.max-blocks", 0)
+                .with("fell.max-leaves", -1)
                 .with("fell.max-radius", 65)
                 .with("fell.max-height", 0)
                 .with("fuel.material", "NOPE")
@@ -270,7 +277,7 @@ class TbConfigTest {
                 .with("explosion.knockback-multiplier", -0.5)
                 .with("coal.material", "ALSO_NOPE"));
 
-        assertEquals(8, warnings.size(), () -> "one warning per rejected key, got " + warnings);
+        assertEquals(9, warnings.size(), () -> "one warning per rejected key, got " + warnings);
     }
 
     private void assertSingleWarningNaming(String key, String value, Object fallback) {

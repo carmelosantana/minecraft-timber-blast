@@ -9,6 +9,15 @@ fell:
   # Hard ceiling on how many logs a single swing may fell. Protects the server
   # from a pathological mega-tree. Valid range: 1-4096.
   max-blocks: 256
+  # Hard ceiling on how many leaves a single swing may break. This is a separate
+  # budget from max-blocks because leaves, not logs, dominate the cost of a fell:
+  # every leaf is offered to protection plugins as its own BlockBreakEvent, and
+  # that event is dispatched synchronously through every listening plugin on the
+  # server. A fully-grown jungle tree's canopy can be several hundred blocks, so
+  # an uncapped fell puts several hundred event dispatches -- and, with a logging
+  # plugin installed, several hundred database rows -- into a single tick.
+  # 0 breaks no leaves at all. Valid range: 0-4096.
+  max-leaves: 256
   # Horizontal search radius, in blocks, from the struck log. Valid range: 1-64.
   max-radius: 8
   # Vertical search height, in blocks, above the struck log. Valid range: 1-256.

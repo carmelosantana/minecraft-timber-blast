@@ -36,12 +36,10 @@ public final class WielderDamageListener implements Listener {
     private final BlastGuard guard;
 
     /**
-     * Package-private on purpose, and the only way in from outside is
-     * {@link #protecting(FellExecutor)}. The suppression only works when this listener and
-     * the executor share one {@link BlastGuard}; handing them separate instances would leave
-     * the wielder taking the full force of their own axe, and it would look correct at every
-     * call site. Taking the executor instead of a guard makes that miswiring impossible to
-     * express rather than merely documented against.
+     * Package-private on purpose. The suppression only works when this listener and the
+     * executor share one {@link BlastGuard}; handing them separate instances would leave the
+     * wielder taking the full force of their own axe, and it would look correct at every call
+     * site.
      */
     WielderDamageListener(BlastGuard guard) {
         this.guard = Objects.requireNonNull(guard, "guard");
@@ -50,10 +48,18 @@ public final class WielderDamageListener implements Listener {
     /**
      * The listener that spares {@code executor}'s wielders.
      *
+     * <p>Package-private, one level deeper than it first appears it needs to be. Making this
+     * public closed the "two guards" miswiring but only moved the failure: with two executors
+     * in scope, wiring executor A into {@link TimberBlastListener} as the {@code FellAction}
+     * and calling {@code protecting(executorB)} rebuilds the original bug -- the listener
+     * watches a guard nobody ever arms, and the wielder takes the full blast. The only public
+     * route is now {@link TimberBlastListener#damageListener()}, so the damage listener is
+     * always derived from the very executor the trigger listener calls.
+     *
      * @param executor the executor whose blasts this listener suppresses damage for
      * @return a listener sharing that executor's guard, by construction
      */
-    public static WielderDamageListener protecting(FellExecutor executor) {
+    static WielderDamageListener protecting(FellExecutor executor) {
         return new WielderDamageListener(
                 Objects.requireNonNull(executor, "executor").guard());
     }

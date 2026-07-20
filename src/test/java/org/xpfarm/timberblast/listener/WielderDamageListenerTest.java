@@ -35,6 +35,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Fires real {@link EntityDamageEvent}s at the listener.
@@ -137,15 +138,16 @@ class WielderDamageListenerTest {
                 "cancelled events are visited deliberately -- see Settled API Fact 1");
     }
 
-    @Test
-    void theListenerBuiltFromAnExecutorSharesThatExecutorsGuard() {
-        // The whole point of the factory: there is no way to hand the two halves of the
-        // suppression different guards, so the wielder cannot be killed by their own axe
-        // through a wiring mistake in Task 6.
-        FellExecutor executor = new FellExecutor(
-                () -> new TbConfig(new FellSettings(256, 8, 32, true), new FuelSettings("GUNPOWDER", 2),
+    private static FellExecutor anExecutor() {
+        return new FellExecutor(
+                () -> new TbConfig(new FellSettings(256, 256, 8, 32, true), new FuelSettings("GUNPOWDER", 2),
                         new ExplosionSettings(2.0, false, 1.5), new CoalSettings(true, "COAL")),
                 new TreeScanner(), BlockTypes.SERVER_TAGS);
+    }
+
+    @Test
+    void theListenerBuiltFromAnExecutorSharesThatExecutorsGuard() {
+        FellExecutor executor = anExecutor();
         WielderDamageListener listener = WielderDamageListener.protecting(executor);
         EntityDamageEvent event = damage(player(WIELDER), DamageCause.BLOCK_EXPLOSION);
 
@@ -154,6 +156,69 @@ class WielderDamageListenerTest {
 
         assertEquals(0.0, event.getDamage(), 1.0E-9,
                 "marking the executor's guard must be what this listener sees");
+    }
+
+    /**
+     * The fix for the miswiring the previous round only appeared to close.
+     *
+     * <p>Making {@code protecting(FellExecutor)} public removed the "two {@code BlastGuard}s"
+     * mistake but left an identical one reachable through public API: with two executors in
+     * scope, a caller could wire executor A into {@link TimberBlastListener} as the fell action
+     * and build the damage listener from executor B. The listener then watched a guard nobody
+     * ever armed, and the wielder took the full 12.0 from their own blast. This asserts the
+     * public route now derives the damage listener from the executor that does the felling, so
+     * arming that executor's guard is what the listener sees.
+     */
+    @Test
+    void theDamageListenerReachedThroughTheTriggerListenerWatchesTheFellingExecutorsGuard() {
+        FellExecutor executor = anExecutor();
+        TimberBlastListener trigger = TimberBlastListener.triggering(
+                item -> true, BlockTypes.SERVER_TAGS, executor);
+        EntityDamageEvent event = damage(player(WIELDER), DamageCause.BLOCK_EXPLOSION);
+
+        // Arm the guard of the executor the *trigger* listener calls -- nothing else.
+        executor.guard().begin(WIELDER);
+        trigger.damageListener().onEntityDamage(event);
+
+        assertEquals(0.0, event.getDamage(), 1.0E-9,
+                "the damage listener must watch the guard of the executor that fells");
+    }
+
+    /**
+     * The other half of the same rule: a damage listener taken from a <em>different</em>
+     * executor does not suppress. This is the probe that disproved the previous round's
+     * "unrepresentable" claim, kept as a test so the property is stated both ways -- the
+     * suppression is not something that happens for any executor, it is specifically tied to
+     * the one whose guard was armed.
+     */
+    @Test
+    void aDamageListenerFromAnotherExecutorDoesNotSuppressThisOnesBlast() {
+        FellExecutor felling = anExecutor();
+        FellExecutor unrelated = anExecutor();
+        EntityDamageEvent event = damage(player(WIELDER), DamageCause.BLOCK_EXPLOSION);
+
+        felling.guard().begin(WIELDER);
+        TimberBlastListener.triggering(item -> true, BlockTypes.SERVER_TAGS, unrelated)
+                .damageListener()
+                .onEntityDamage(event);
+
+        assertEquals(12.0, event.getDamage(), 1.0E-9,
+                "a foreign executor's guard must not be what protects this wielder");
+    }
+
+    /**
+     * A trigger listener built around a bare {@link org.xpfarm.timberblast.fell.FellAction} has
+     * no executor and therefore no guard to share. It fails loudly rather than handing back a
+     * listener watching a fresh, never-armed guard -- which is exactly the silent failure this
+     * whole construction exists to prevent.
+     */
+    @Test
+    void aTriggerListenerWithNoExecutorRefusesToMintADamageListener() {
+        TimberBlastListener trigger = new TimberBlastListener(
+                item -> true, BlockTypes.SERVER_TAGS, (wielder, struck) -> {
+        });
+
+        assertThrows(IllegalStateException.class, trigger::damageListener);
     }
 
     @Test

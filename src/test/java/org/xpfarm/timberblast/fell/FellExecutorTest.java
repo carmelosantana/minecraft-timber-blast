@@ -67,7 +67,7 @@ class FellExecutorTest {
 
     private static TbConfig config() {
         return new TbConfig(
-                new FellSettings(256, 8, 32, true),
+                new FellSettings(256, 256, 8, 32, true),
                 new FuelSettings("GUNPOWDER", 2),
                 new ExplosionSettings(2.0, false, 1.5),
                 new CoalSettings(true, "COAL"));
@@ -229,6 +229,108 @@ class FellExecutorTest {
         assertTrue(world.calls.contains("breakNaturally 0,66,0"), "the logs are unaffected");
     }
 
+    // --- fell.max-leaves bounds the event volume ------------------------------------------
+
+    /**
+     * The same three-log trunk under a full 25-block canopy: every non-log position in the
+     * 3x3x3 shell around the top two logs. {@code fell.max-blocks} does not bound any of it --
+     * that key caps logs only -- so without {@code fell.max-leaves} this fell dispatches 28
+     * synchronous {@code BlockBreakEvent}s, and a real jungle tree dispatches several hundred.
+     */
+    private static BlockQuery leafyTree() {
+        Map<BlockPos, BlockKind> blocks = new HashMap<>();
+        blocks.put(ORIGIN, BlockKind.LOG);
+        blocks.put(MIDDLE, BlockKind.LOG);
+        blocks.put(TOP, BlockKind.LOG);
+        for (int x = -1; x <= 1; x++) {
+            for (int y = 65; y <= 67; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    blocks.putIfAbsent(new BlockPos(x, y, z), BlockKind.LEAF);
+                }
+            }
+        }
+        return pos -> blocks.getOrDefault(pos, BlockKind.OTHER);
+    }
+
+    /** How many break events the fell offered for blocks that are not the trunk. */
+    private static long leafRequests(RecordingFellWorld world) {
+        return world.calls.stream()
+                .filter(c -> c.startsWith("requestBreak"))
+                .filter(c -> !c.contains("0,64,0") && !c.contains("0,65,0") && !c.contains("0,66,0"))
+                .count();
+    }
+
+    private static TbConfig withLeafCap(int maxLeaves) {
+        FellSettings fell = config().fell();
+        return new TbConfig(
+                new FellSettings(fell.maxBlocks(), maxLeaves, fell.maxRadius(), fell.maxHeight(), true),
+                config().fuel(), config().explosion(), config().coal());
+    }
+
+    @Test
+    void theCanopyIsBigEnoughToNeedCapping() {
+        // Guards the three tests below: if the fixture ever stopped producing more leaves than
+        // the caps they set, they would pass vacuously.
+        RecordingFellWorld world = new RecordingFellWorld();
+
+        executor(withLeafCap(4096)).run(ORIGIN, leafyTree(), world, wielder(64), WIELDER);
+
+        assertEquals(25, leafRequests(world),
+                "the fixture must offer far more leaves than the caps under test");
+    }
+
+    @Test
+    void theLeafCapBoundsHowManyBreakEventsOneFellDispatches() {
+        RecordingFellWorld world = new RecordingFellWorld();
+
+        assertTrue(executor(withLeafCap(4)).run(ORIGIN, leafyTree(), world, wielder(64), WIELDER));
+
+        assertEquals(4, leafRequests(world),
+                "fell.max-leaves must bound the leaf BlockBreakEvents, not merely the drops");
+        assertEquals(4, world.broken().stream().filter(b -> !b.contains(",64,0")
+                        && !b.contains("0,65,0") && !b.contains("0,66,0")).count());
+    }
+
+    @Test
+    void aLeafCapOfZeroBreaksNoLeavesAtAllButStillFellsTheTree() {
+        RecordingFellWorld world = new RecordingFellWorld();
+
+        assertTrue(executor(withLeafCap(0)).run(ORIGIN, leafyTree(), world, wielder(64), WIELDER));
+
+        assertEquals(0, leafRequests(world), "a cap of 0 must break no leaves at all");
+        assertTrue(world.broken().contains("breakDropping 0,64,0 COAL"),
+                "the leaf cap must not touch the logs");
+        assertEquals(3, world.broken().size(), "exactly the three trunk logs come down");
+    }
+
+    /**
+     * The cap counts offers, not successful breaks. If it counted breaks, a claim that vetoes
+     * every leaf would drive one event per leaf in the whole canopy while breaking nothing --
+     * unbounded dispatch in exactly the situation the cap exists for.
+     */
+    @Test
+    void aVetoingClaimCannotDriveMoreLeafEventsThanTheCapAllows() {
+        RecordingFellWorld world = new RecordingFellWorld();
+        for (int x = -1; x <= 1; x++) {
+            for (int y = 65; y <= 67; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    // The cube overlaps the trunk; veto only the canopy, so the assertion
+                    // below distinguishes "leaves refused" from "whole fell refused".
+                    if (!pos.equals(MIDDLE) && !pos.equals(TOP)) {
+                        world.veto(pos);
+                    }
+                }
+            }
+        }
+
+        executor(withLeafCap(4)).run(ORIGIN, leafyTree(), world, wielder(64), WIELDER);
+
+        assertEquals(4, leafRequests(world),
+                "vetoed leaves must still consume the budget, or the cap bounds nothing");
+        assertEquals(3, world.broken().size(), "no leaf came down, but the trunk still did");
+    }
+
     // --- fuel ---------------------------------------------------------------------------
 
     @Test
@@ -350,7 +452,7 @@ class FellExecutorTest {
 
     @Test
     void leavesAreLeftAloneWhenDropLeavesIsOff() {
-        TbConfig config = new TbConfig(new FellSettings(256, 8, 32, false), config().fuel(),
+        TbConfig config = new TbConfig(new FellSettings(256, 256, 8, 32, false), config().fuel(),
                 config().explosion(), config().coal());
         RecordingFellWorld world = new RecordingFellWorld();
 
@@ -362,7 +464,7 @@ class FellExecutorTest {
 
     @Test
     void theConfiguredBlockCapReachesTheScanner() {
-        TbConfig config = new TbConfig(new FellSettings(1, 8, 32, false), config().fuel(),
+        TbConfig config = new TbConfig(new FellSettings(1, 256, 8, 32, false), config().fuel(),
                 config().explosion(), config().coal());
         RecordingFellWorld world = new RecordingFellWorld();
 
@@ -414,7 +516,7 @@ class FellExecutorTest {
     @Test
     void maxHeightBoundsTheClimbAndMaxRadiusBoundsTheReach() {
         // radius 2, height 5: the whole trunk comes down, the branch stops two out.
-        TbConfig config = new TbConfig(new FellSettings(256, 2, 5, false), config().fuel(),
+        TbConfig config = new TbConfig(new FellSettings(256, 256, 2, 5, false), config().fuel(),
                 config().explosion(), new CoalSettings(false, "COAL"));
         RecordingFellWorld world = new RecordingFellWorld();
 
@@ -431,7 +533,7 @@ class FellExecutorTest {
     void swappingRadiusAndHeightFellsAVisiblyDifferentTree() {
         // The same tree under the transposed bounds: a squat, wide fell instead of a tall,
         // narrow one. Same log count, different logs -- so this is asserted by position.
-        TbConfig config = new TbConfig(new FellSettings(256, 5, 2, false), config().fuel(),
+        TbConfig config = new TbConfig(new FellSettings(256, 256, 5, 2, false), config().fuel(),
                 config().explosion(), new CoalSettings(false, "COAL"));
         RecordingFellWorld world = new RecordingFellWorld();
 

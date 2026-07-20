@@ -95,10 +95,18 @@ prevents the plugin from enabling.
 ### Persistence
 
 No database and no flat-file state. The axe is identified by a
-`PersistentDataContainer` key (`timber-blast:axe`, `BYTE`) written into the
+`PersistentDataContainer` key (`timberblast:axe`, `BYTE`) written into the
 `ItemStack` meta, so identity travels with the item through chests, hoppers, death,
 and restarts with no server-side bookkeeping. Scorch-fire tracking is in-memory only
 and intentionally does not survive restart.
+
+The namespace is `timberblast`, not `timber-blast`: the key is built with
+`new NamespacedKey(plugin, "axe")`, and Bukkit derives the namespace from the
+`plugin.yml` name (`TimberBlast`) lowercased. An earlier draft of this checklist said
+`timber-blast:axe`, which the plugin-instance constructor cannot produce. Settled at
+gate 4 in favour of the idiomatic form. Nothing has shipped, so no migration is needed —
+but this value is baked into every crafted axe and must not change after v1.0.0
+without a PDC migration.
 
 ### Dependencies
 

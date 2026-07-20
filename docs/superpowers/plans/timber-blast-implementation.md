@@ -240,8 +240,16 @@ Fell path in `FellExecutor`:
 4. Break the surviving logs. The **origin** block (first element of `logs`) drops
    `coal.material` × 1 instead of its log drop when `coal.enabled`; every other log
    drops naturally (`Block#breakNaturally`).
-5. If `fell.drop-leaves`, break the scanned leaves naturally so they roll vanilla
-   sapling/stick/apple tables.
+4a. **If zero logs survived the veto, abort the whole fell here.** Do not consume fuel,
+   do not explode, do not knock back, do not damage durability. A protection plugin
+   that blocks everything must cost the player nothing. (Corrected 2026-07-20: the
+   original plan made steps 6–9 unconditional, so a fully-vetoed fell inside a claim
+   still charged gunpowder and shoved the player.)
+5. If `fell.drop-leaves`, break the scanned leaves — **each through the same cancellable
+   `BlockBreakEvent` path as the logs**, not by unprotected removal — so they roll
+   vanilla sapling/stick/apple tables only where the player was allowed to break them.
+   (Corrected 2026-07-20: the original plan broke leaves with no event, so a fully-vetoed
+   fell inside a claim still stripped the canopy.)
 6. Consume `fuel.amount` of `fuel.material` from the player's inventory.
 7. Create the explosion at the origin:
    `world.createExplosion(originLocation, (float) power, false, config.explosionBlockDamage())`

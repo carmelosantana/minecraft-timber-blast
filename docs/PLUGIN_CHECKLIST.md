@@ -134,6 +134,8 @@ trivially and its boxes should be ticked with that explanation rather than left 
 10. A tree exceeding `fell.max-blocks` stops at the cap and leaves the remainder standing.
 11. A wood structure wider than `fell.max-radius` is not fully consumed.
 12. A `BlockBreakEvent` cancelled by another plugin leaves that specific log standing while the rest of the fell proceeds.
+12a. Leaves are removed through the same cancellable break path as logs — a fell inside a protected claim strips no canopy the player could not break by hand.
+12b. A fell in which every log is vetoed costs the player nothing: no gunpowder consumed, no blast, no knockback, no durability loss.
 13. `/timberblast give` grants a functioning axe; `/timberblast reload` applies changed config without restart.
 14. Both admin commands are refused without `timberblast.admin`.
 15. **Bedrock/Geyser:** a Bedrock player crafts, receives, and swings the axe, and the fell triggers identically to Java. This check specifically confirms PDC identity survives the Geyser path — see limitations.

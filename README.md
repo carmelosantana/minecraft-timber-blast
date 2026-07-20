@@ -15,7 +15,6 @@ chests — but it launches you backward and hurts anything standing too close.
 | You hit | What happens |
 |---|---|
 | A log | Whole tree falls, 1 gunpowder burned, struck log becomes coal |
-| A leaf | The leaves scorch. No blast, no fuel burned |
 | Anything else | Behaves like a normal axe |
 
 Each fell burns **one gunpowder** from your inventory. Out of gunpowder, the axe
@@ -29,11 +28,10 @@ The specific log you struck doesn't drop as a log. It comes out the other side a
 a single piece of **coal**, charred by the blast. Every other log in the tree
 drops normally.
 
-### The leaves
+### Missing the trunk
 
-Missing the trunk and clipping a leaf instead sets the leaves alight — but the
-fire will not spread. It burns out where it started. Bad aim costs you a few
-leaves, not a biome.
+Clipping a leaf instead of the trunk simply does nothing — the axe swings like any
+other axe. You have to hit wood.
 
 ## Limits
 

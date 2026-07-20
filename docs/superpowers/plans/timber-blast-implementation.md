@@ -172,7 +172,23 @@ spec states, via a small pure helper that returns the pattern/ingredients. Do no
 fabricate a Bukkit mock. State clearly in the report which behaviors are deferred to
 runtime verification (gate 7a).
 
-## Task 4 — ScorchService
+## Task 4 — ScorchService (WITHDRAWN 2026-07-20)
+
+**This task is cancelled. The leaf-fire mechanic was scrapped entirely by Carmelo.**
+
+Hitting a leaf with the Timber Blast axe now does nothing special — the axe behaves
+exactly like a normal axe. No fire, no scorch, no containment, no tracking.
+
+Everything below is retained only as the record of what was built and removed. The
+implementation (`org.xpfarm.timberblast.effect`) was completed, reviewed, and then
+deleted along with the `scorch.enabled` and `scorch.spread` config keys. Task 5's
+leaf branch is correspondingly reduced to "return without acting."
+
+Do not implement any of the following.
+
+---
+
+## Task 4 — ScorchService (original text, withdrawn)
 
 Create `org.xpfarm.timberblast.effect`.
 
@@ -206,10 +222,10 @@ Tasks 1–4 and must use their existing APIs without modifying them.
 
 1. Return unless `TimberBlastItem.isTimberBlast(event.getItemInHand())`.
 2. Return unless the player has `timberblast.use`.
-3. If the struck block is a leaf (`Tag.LEAVES`) → call `ScorchService.scorch(block)`,
-   cancel the event, consume **no** fuel, and return. No explosion.
-4. If the struck block is a log (`Tag.LOGS`) → run the fell path below.
-5. Any other block → return without acting, so the axe behaves like a normal axe.
+3. If the struck block is a log (`Tag.LOGS`) → run the fell path below.
+4. Any other block, **including leaves** → return without acting, so the axe behaves
+   exactly like a normal axe. There is no leaf-specific behavior; the ScorchService
+   task was withdrawn.
 
 Fell path in `FellExecutor`:
 

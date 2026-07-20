@@ -121,7 +121,11 @@ trivially and its boxes should be ticked with that explanation rather than left 
 
 ### Acceptance checks
 
-1. Crafting the recipe yields an axe whose meta carries the `timber-blast:axe` PDC key.
+1. Crafting the recipe yields an axe whose meta carries the `timberblast:axe` PDC key.
+   Verify the **write and read paths together**, not just marker presence: `create()`
+   writes through `meta.getPersistentDataContainer()` while `isTimberBlast` reads
+   through `stack.getPersistentDataContainer()` — two different API surfaces onto the
+   same `custom_data` component. Their agreement is the thing under test.
 2. Striking a log with the axe, holding ≥1 gunpowder, removes every connected log within bounds and drops them as items.
 3. Exactly one gunpowder is consumed per successful fell.
 4. With zero gunpowder, striking a log performs normal vanilla axe behavior — no fell, no blast, no coal.

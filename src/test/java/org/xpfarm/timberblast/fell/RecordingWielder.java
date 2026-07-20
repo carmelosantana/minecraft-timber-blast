@@ -25,6 +25,9 @@ final class RecordingWielder implements Wielder {
     /** Every {@code consumeFuel} call, as {@code "MATERIAL xN"}. */
     final List<String> consumed = new ArrayList<>();
 
+    /** Every {@code hasFuel} question, as {@code "MATERIAL xN"} -- {@code null} included. */
+    final List<String> asked = new ArrayList<>();
+
     Vector velocity;
     int toolDamage;
 
@@ -36,6 +39,7 @@ final class RecordingWielder implements Wielder {
 
     @Override
     public boolean hasFuel(Material material, int amount) {
+        asked.add(material + " x" + amount);
         return material == carried && carriedAmount >= amount;
     }
 

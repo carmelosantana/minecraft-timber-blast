@@ -12,17 +12,29 @@ package org.xpfarm.timberblast.listener;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.entity.Creeper;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 import org.junit.jupiter.api.Test;
+import org.xpfarm.timberblast.config.CoalSettings;
+import org.xpfarm.timberblast.config.ExplosionSettings;
+import org.xpfarm.timberblast.config.FellSettings;
+import org.xpfarm.timberblast.config.FuelSettings;
+import org.xpfarm.timberblast.config.TbConfig;
 import org.xpfarm.timberblast.fell.BlastGuard;
+import org.xpfarm.timberblast.fell.BlockTypes;
+import org.xpfarm.timberblast.fell.FellExecutor;
 import org.xpfarm.timberblast.testsupport.FakeBlocks;
+import org.xpfarm.timberblast.tree.TreeScanner;
 
+import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Fires real {@link EntityDamageEvent}s at the listener.
@@ -111,6 +123,37 @@ class WielderDamageListenerTest {
         listenerGuarding(WIELDER).onEntityDamage(event);
 
         assertEquals(12.0, event.getDamage(), 1.0E-9);
+    }
+
+    @Test
+    void theHandlerRunsLastSoNothingCanReinstateTheDamage() throws Exception {
+        Method handler = WielderDamageListener.class.getMethod("onEntityDamage", EntityDamageEvent.class);
+        EventHandler annotation = handler.getAnnotation(EventHandler.class);
+
+        assertNotNull(annotation);
+        assertEquals(EventPriority.HIGHEST, annotation.priority(),
+                "a suppression another plugin can raise again afterwards is no suppression");
+        assertFalse(annotation.ignoreCancelled(),
+                "cancelled events are visited deliberately -- see Settled API Fact 1");
+    }
+
+    @Test
+    void theListenerBuiltFromAnExecutorSharesThatExecutorsGuard() {
+        // The whole point of the factory: there is no way to hand the two halves of the
+        // suppression different guards, so the wielder cannot be killed by their own axe
+        // through a wiring mistake in Task 6.
+        FellExecutor executor = new FellExecutor(
+                () -> new TbConfig(new FellSettings(256, 8, 32, true), new FuelSettings("GUNPOWDER", 2),
+                        new ExplosionSettings(2.0, false, 1.5), new CoalSettings(true, "COAL")),
+                new TreeScanner(), BlockTypes.SERVER_TAGS);
+        WielderDamageListener listener = WielderDamageListener.protecting(executor);
+        EntityDamageEvent event = damage(player(WIELDER), DamageCause.BLOCK_EXPLOSION);
+
+        executor.guard().begin(WIELDER);
+        listener.onEntityDamage(event);
+
+        assertEquals(0.0, event.getDamage(), 1.0E-9,
+                "marking the executor's guard must be what this listener sees");
     }
 
     @Test

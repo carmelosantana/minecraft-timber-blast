@@ -36,6 +36,37 @@ public final class FakeBlocks {
     }
 
     /**
+     * An answer that depends on what the method was called with.
+     *
+     * <p>A fixed value in the answers map cannot tell {@code hasPermission("timberblast.use")}
+     * from {@code hasPermission("anything.at.all")}, which means a test using one proves
+     * nothing about the permission node the production code actually asks for. Supplying an
+     * {@code Answer} instead lets a stub inspect its arguments, so a renamed or typo'd node
+     * fails the build.
+     */
+    @FunctionalInterface
+    public interface Answer {
+
+        /**
+         * @param args the invocation's arguments, or {@code null} for a no-arg method
+         * @return the value the stubbed method returns; {@code null} for a {@code void} one
+         */
+        Object answer(Object[] args);
+    }
+
+    /**
+     * An {@link Answer} for a single-{@code String}-argument method that returns
+     * {@code result} when the argument equals {@code expected} and {@code false} otherwise.
+     *
+     * @param expected the exact argument the production code must pass
+     * @param result   what to answer when it does
+     * @return an argument-checking answer
+     */
+    public static Answer onlyFor(String expected, boolean result) {
+        return args -> result && args != null && args.length > 0 && expected.equals(args[0]);
+    }
+
+    /**
      * A block at {@code (x, y, z)} whose {@code getWorld().getName()} is {@code world}.
      *
      * @param world name reported by the block's world
@@ -71,7 +102,8 @@ public final class FakeBlocks {
      *
      * @param type    the interface to implement
      * @param label   what this stands for, used in {@code toString} and in failure messages
-     * @param answers method name to fixed return value; every other method throws
+     * @param answers method name to either a fixed return value or an {@link Answer} that
+     *                inspects the arguments; every other method throws
      */
     public static <T> T stub(Class<T> type, String label, Map<String, Object> answers) {
         return proxy(type, label, answers);
@@ -80,6 +112,9 @@ public final class FakeBlocks {
     private static <T> T proxy(Class<T> type, String label, Map<String, Object> answers) {
         InvocationHandler handler = (self, method, args) -> {
             Object answer = answers.get(method.getName());
+            if (answer instanceof Answer computed) {
+                return computed.answer(args);
+            }
             if (answer != null) {
                 return answer;
             }

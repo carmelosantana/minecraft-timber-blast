@@ -60,8 +60,15 @@ class TimberBlastListenerTest {
         return new TimberBlastListener(isAxe, ONLY_OAK_LOG, (wielder, struck) -> felled.add(struck));
     }
 
+    /**
+     * The permission node is spelled out here as a literal rather than read from
+     * {@link TimberBlastListener#USE_PERMISSION}. The stub answers {@code true} only for that
+     * exact string, so renaming or mistyping the node in production makes every fell test
+     * fail instead of quietly gating on a node nobody has been granted.
+     */
     private static Player player(boolean permitted) {
-        return FakeBlocks.stub(Player.class, "the wielder", Map.of("hasPermission", permitted));
+        return FakeBlocks.stub(Player.class, "the wielder",
+                Map.of("hasPermission", FakeBlocks.onlyFor("timberblast.use", permitted)));
     }
 
     /** The held item is always null here; identity is decided by the injected predicate. */
@@ -133,5 +140,11 @@ class TimberBlastListenerTest {
         assertEquals(EventPriority.NORMAL, annotation.priority());
         assertTrue(annotation.ignoreCancelled(),
                 "another plugin's cancellation of the swing must stop the fell");
+    }
+
+    @Test
+    void theUsePermissionIsTheNodeDeclaredInPluginYml() {
+        assertEquals("timberblast.use", TimberBlastListener.USE_PERMISSION,
+                "plugin.yml declares this node; a rename here would gate on nothing");
     }
 }

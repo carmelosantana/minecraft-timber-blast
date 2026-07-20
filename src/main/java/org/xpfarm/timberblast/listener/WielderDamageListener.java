@@ -15,6 +15,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.xpfarm.timberblast.fell.BlastGuard;
+import org.xpfarm.timberblast.fell.FellExecutor;
 
 import java.util.Objects;
 
@@ -34,8 +35,27 @@ public final class WielderDamageListener implements Listener {
 
     private final BlastGuard guard;
 
-    public WielderDamageListener(BlastGuard guard) {
+    /**
+     * Package-private on purpose, and the only way in from outside is
+     * {@link #protecting(FellExecutor)}. The suppression only works when this listener and
+     * the executor share one {@link BlastGuard}; handing them separate instances would leave
+     * the wielder taking the full force of their own axe, and it would look correct at every
+     * call site. Taking the executor instead of a guard makes that miswiring impossible to
+     * express rather than merely documented against.
+     */
+    WielderDamageListener(BlastGuard guard) {
         this.guard = Objects.requireNonNull(guard, "guard");
+    }
+
+    /**
+     * The listener that spares {@code executor}'s wielders.
+     *
+     * @param executor the executor whose blasts this listener suppresses damage for
+     * @return a listener sharing that executor's guard, by construction
+     */
+    public static WielderDamageListener protecting(FellExecutor executor) {
+        return new WielderDamageListener(
+                Objects.requireNonNull(executor, "executor").guard());
     }
 
     /**

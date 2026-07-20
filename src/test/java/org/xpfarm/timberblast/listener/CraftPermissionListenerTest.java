@@ -68,7 +68,10 @@ class CraftPermissionListenerTest {
 
     private PrepareItemCraftEvent prepare(NamespacedKey recipeKey, boolean permitted) {
         CraftingInventory inventory = inventoryFor(keyedRecipe(recipeKey));
-        Player viewer = FakeBlocks.stub(Player.class, "the crafter", Map.of("hasPermission", permitted));
+        // The node is a literal, not a reference to the constant: the stub answers true only
+        // for this exact string, so a renamed or typo'd node fails the build.
+        Player viewer = FakeBlocks.stub(Player.class, "the crafter",
+                Map.of("hasPermission", FakeBlocks.onlyFor("timberblast.craft", permitted)));
         InventoryView view = FakeBlocks.stub(InventoryView.class, "the crafting view",
                 Map.of("getPlayer", viewer));
         return new PrepareItemCraftEvent(inventory, view, false);
@@ -98,6 +101,12 @@ class CraftPermissionListenerTest {
         listener().onPrepareItemCraft(prepare(OTHER_RECIPE, false));
 
         assertTrue(results.isEmpty(), "only this plugin's recipe may be gated");
+    }
+
+    @Test
+    void theCraftPermissionIsTheNodeDeclaredInPluginYml() {
+        assertEquals("timberblast.craft", CraftPermissionListener.CRAFT_PERMISSION,
+                "plugin.yml declares this node; a rename here would gate on nothing");
     }
 
     @Test

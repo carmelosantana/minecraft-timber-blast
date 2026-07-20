@@ -72,7 +72,15 @@ public final class BukkitFellWorld implements FellWorld {
         return world.getBlockAt(pos.x(), pos.y(), pos.z());
     }
 
-    private Location centreOf(BlockPos pos) {
+    /**
+     * The middle of {@code pos}, which is where drops and the blast are aimed.
+     *
+     * <p>Package-private rather than private so the offsets can be asserted directly: a
+     * dropped or negated {@code +0.5} misplaces every drop and the explosion itself, and
+     * {@code breakDropping} cannot be driven end to end offline because {@code new ItemStack}
+     * reaches Paper's item registry.
+     */
+    Location centreOf(BlockPos pos) {
         return new Location(world, pos.x() + 0.5, pos.y() + 0.5, pos.z() + 0.5);
     }
 }

@@ -1,0 +1,24 @@
+name: TimberBlast
+version: '${project.version}'
+main: org.xpfarm.timberblast.TimberBlastPlugin
+api-version: '1.21'
+author: Carmelo Santana
+website: https://xpfarm.org
+description: Gunpowder-fuelled axe that fells a whole tree in one swing, charring the struck log into coal
+
+commands:
+  timberblast:
+    description: Manage Timber Blast axes
+    usage: /timberblast <give [player] | reload>
+    aliases: [tb]
+
+permissions:
+  timberblast.use:
+    description: Trigger a tree fell with the Timber Blast axe
+    default: true
+  timberblast.craft:
+    description: Craft the Timber Blast axe
+    default: true
+  timberblast.admin:
+    description: Issue Timber Blast axes and reload the configuration
+    default: op

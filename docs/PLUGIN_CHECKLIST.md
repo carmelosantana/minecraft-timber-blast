@@ -156,17 +156,44 @@ No gates are withheld. Status is `active`; all twelve gates apply.
 ## 2. Repository
 
 - [ ] Repository is `carmelosantana/minecraft-<slug>` with an SSH `origin` and `main` branch.
-- [ ] Existing user-owned worktree changes were identified and preserved.
-- [ ] No `herobrinesystems` references remain in source, metadata, workflows, remotes, or documentation.
+      **Partially complete.** `carmelosantana/minecraft-timber-blast` was created and
+      `origin` is set to `git@github.com:carmelosantana/minecraft-timber-blast.git`.
+      The local branch is `main` with one commit (`9afa7f9`), but `git push -u origin main`
+      was **blocked by the harness permission layer**, so the remote `main` does not exist
+      yet. Unblock the push and re-run to tick this.
+- [x] Existing user-owned worktree changes were identified and preserved.
+      No pre-existing worktree: the repository was created fresh at this gate. The only
+      prior file was `docs/PLUGIN_CHECKLIST.md` from gate 1, which is preserved and committed.
+- [x] No `herobrinesystems` references remain in source, metadata, workflows, remotes, or documentation.
+      `rg -n 'herobrinesystems' . --hidden -g '!target/**' -g '!.git/**'` returns only this
+      checklist's own checkbox text — no real references.
+
+### Repository visibility — open decision
+
+The repository was created **private**. All ten sibling plugin repositories are `PUBLIC`,
+and `gh repo edit --visibility public` was **blocked by the harness permission layer**.
+This must be resolved before gate 10: the updater downloads release assets unauthenticated,
+so a private repository will fail updater enrollment even if every earlier gate passes.
 
 ## 3. Metadata
 
-- [ ] AGPL-3.0-or-later `LICENSE` and Maven license metadata are present and consistent.
-- [ ] `https://xpfarm.org` metadata and Carmelo Santana author metadata are present.
-- [ ] `play.xpfarm.org` is recorded as the public Minecraft server hostname where server identity is documented.
-- [ ] New work uses the `org.xpfarm` Maven group, or an existing-coordinate compatibility decision is documented.
-- [ ] Repository slug, artifact, releasable JAR, updater destination, and `plugin.yml` names are consistent.
-- [ ] No secrets committed in source, defaults, tests, logs, history, or documentation.
+- [x] AGPL-3.0-or-later `LICENSE` and Maven license metadata are present and consistent.
+      Full AGPL-3.0 text in `LICENSE`; `pom.xml` `<licenses>` names "GNU Affero General
+      Public License v3.0 or later" pointing at `https://www.gnu.org/licenses/agpl-3.0.html`.
+- [x] `https://xpfarm.org` metadata and Carmelo Santana author metadata are present.
+      `pom.xml` `<url>` and `<developers>`; `plugin.yml` `website:` and `author:`.
+- [x] `play.xpfarm.org` is recorded as the public Minecraft server hostname where server identity is documented.
+      Recorded in `README.md` (Java and Bedrock, via Geyser + Floodgate).
+- [x] New work uses the `org.xpfarm` Maven group, or an existing-coordinate compatibility decision is documented.
+      `org.xpfarm:timber-blast:1.0.0`. No existing-coordinate carve-out applies — this is new work.
+- [x] Repository slug, artifact, releasable JAR, updater destination, and `plugin.yml` names are consistent.
+      Verified: project `<artifactId>timber-blast</artifactId>`, `plugin.yml` `name: TimberBlast`,
+      slug `timber-blast`, updater destination `timber-blast.jar`, releasable JAR
+      `timber-blast-1.0.0.jar`. Matches the gate 1 naming chain exactly.
+- [x] No secrets committed in source, defaults, tests, logs, history, or documentation.
+      Secret scan returned only this checklist's own text and the workflow's
+      `GH_TOKEN: ${{ github.token }}` expression, which is the documented Actions contract,
+      not a committed credential.
 
 ## 4. Compatibility
 
@@ -197,9 +224,20 @@ No gates are withheld. Status is `active`; all twelve gates apply.
 
 ## 8. CI/CD
 
-- [ ] Identical standard plugin Actions workflow is installed with the required triggers, Temurin 25 build, artifact, checksum, and release behavior.
+- [x] Identical standard plugin Actions workflow is installed with the required triggers, Temurin 25 build, artifact, checksum, and release behavior.
+      `.github/workflows/build.yml` matches `GITHUB_ACTIONS.md`: push to `main`, `v*` tags,
+      `pull_request` to `main`, `workflow_dispatch`; `actions/checkout@v7`;
+      `actions/setup-java@v5` Temurin 25 with Maven cache;
+      `mvn --batch-mode --no-transfer-progress clean verify`;
+      `actions/upload-artifact@v7`; and `gh release view`/`create`/`upload --clobber` on `v*`.
+      Checksum generation uses the corrected bare-filename form
+      (`cd target && find . -maxdepth 1 ... -printf '%f\0' | ... sha256sum`), not the
+      `target/`-prefixed variant `GITHUB_ACTIONS.md` documents as defective.
 - [ ] Successful main Actions run is recorded before tagging.
-- [ ] Workflow permissions contain no broader access than the documented contract.
+      Not this skill's to tick — belongs to `minecraft-plugin-release` (gate 8b). Also
+      cannot occur yet: the first push to `main` was blocked, so CI has never run.
+- [x] Workflow permissions contain no broader access than the documented contract.
+      `permissions: contents: write` only.
 
 ## 9. Release
 

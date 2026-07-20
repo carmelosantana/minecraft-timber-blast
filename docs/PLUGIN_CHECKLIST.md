@@ -40,9 +40,10 @@ Established at gate 1; `minecraft-plugin-scaffold` verifies consistency at gate 
 A craftable axe that fells an entire tree in one swing. Hitting a log detonates a
 blast that drops every connected log, leaf, sapling, and stick to the ground and
 launches the player backward; the struck log itself is charred into a single piece
-of coal. Hitting leaves instead of a log only scorches them — no blast. Each fell
-burns one gunpowder from the player's inventory, so the axe stays fuelled by
-creeper farming rather than being a permanent upgrade.
+of coal. Hitting anything other than a log — leaves included — does nothing special;
+the axe simply behaves like a normal axe. Each fell burns one gunpowder from the
+player's inventory, so the axe stays fuelled by creeper farming rather than being a
+permanent upgrade.
 
 ### Commands
 
@@ -60,8 +61,6 @@ Alias: `/tb`. No player-facing commands — the axe is obtained by crafting.
 | `BlockDamageEvent` | listen | Primary trigger. Fires when a player starts breaking a block, before break completion, and carries `getItemInHand()` and `getInstaBreak()`. Confirmed to fire for Bedrock players through Geyser (see research findings below). |
 | `BlockBreakEvent` | fire | One cancellable event per log in the fell set, so any protection plugin can veto individual blocks without this plugin taking a hard dependency on one. Vetoed blocks are dropped from the set and left standing. |
 | `EntityDamageEvent` | listen | Sets the wielder's damage to `0` (never cancels) so the wielder keeps explosion knockback but loses no health. |
-| `BlockSpreadEvent` | listen | Cancels propagation from plugin-placed scorch fire so leaf hits cannot burn down a forest. |
-| `BlockIgniteEvent` | listen | Same containment, for ignition sourced from tracked scorch fire. |
 
 ### Permissions
 
@@ -79,6 +78,7 @@ Alias: `/tb`. No player-facing commands — the axe is obtained by crafting.
 | `fell.max-radius` | int | `8` | 1–64; horizontal distance from struck trunk |
 | `fell.max-height` | int | `32` | 1–256; vertical distance from struck trunk |
 | `fell.drop-leaves` | bool | `true` | — |
+| `fell.max-leaves` | int | `256` | 0–4096; caps leaves broken per fell |
 | `fuel.material` | string | `GUNPOWDER` | must resolve to a valid `Material` |
 | `fuel.amount` | int | `1` | 1–64 |
 | `explosion.power` | float | `2.0` | 0.0–10.0 |
@@ -86,8 +86,6 @@ Alias: `/tb`. No player-facing commands — the axe is obtained by crafting.
 | `explosion.knockback-multiplier` | double | `1.0` | 0.0–5.0 |
 | `coal.enabled` | bool | `true` | — |
 | `coal.material` | string | `COAL` | must resolve to a valid `Material` |
-| `scorch.enabled` | bool | `true` | — |
-| `scorch.spread` | bool | `false` | `true` restores vanilla spreading fire |
 
 Invalid values log a warning and fall back to the default; a malformed config never
 prevents the plugin from enabling.
@@ -95,10 +93,18 @@ prevents the plugin from enabling.
 ### Persistence
 
 No database and no flat-file state. The axe is identified by a
-`PersistentDataContainer` key (`timber-blast:axe`, `BYTE`) written into the
+`PersistentDataContainer` key (`timberblast:axe`, `BYTE`) written into the
 `ItemStack` meta, so identity travels with the item through chests, hoppers, death,
-and restarts with no server-side bookkeeping. Scorch-fire tracking is in-memory only
-and intentionally does not survive restart.
+and restarts with no server-side bookkeeping. The plugin keeps no in-memory state
+beyond loaded configuration.
+
+The namespace is `timberblast`, not `timber-blast`: the key is built with
+`new NamespacedKey(plugin, "axe")`, and Bukkit derives the namespace from the
+`plugin.yml` name (`TimberBlast`) lowercased. An earlier draft of this checklist said
+`timber-blast:axe`, which the plugin-instance constructor cannot produce. Settled at
+gate 4 in favour of the idiomatic form. Nothing has shipped, so no migration is needed —
+but this value is baked into every crafted axe and must not change after v1.0.0
+without a PDC migration.
 
 ### Dependencies
 
@@ -113,7 +119,11 @@ trivially and its boxes should be ticked with that explanation rather than left 
 
 ### Acceptance checks
 
-1. Crafting the recipe yields an axe whose meta carries the `timber-blast:axe` PDC key.
+1. Crafting the recipe yields an axe whose meta carries the `timberblast:axe` PDC key.
+   Verify the **write and read paths together**, not just marker presence: `create()`
+   writes through `meta.getPersistentDataContainer()` while `isTimberBlast` reads
+   through `stack.getPersistentDataContainer()` — two different API surfaces onto the
+   same `custom_data` component. Their agreement is the thing under test.
 2. Striking a log with the axe, holding ≥1 gunpowder, removes every connected log within bounds and drops them as items.
 3. Exactly one gunpowder is consumed per successful fell.
 4. With zero gunpowder, striking a log performs normal vanilla axe behavior — no fell, no blast, no coal.
@@ -121,14 +131,15 @@ trivially and its boxes should be ticked with that explanation rather than left 
 6. Attached leaves are removed and roll their vanilla drop tables (saplings, sticks, apples).
 7. The blast damages no blocks at any configured power.
 8. The wielder is knocked back and loses no health; nearby mobs take blast damage.
-9. Striking a leaf block places fire, consumes no gunpowder, and produces no blast.
-10. Scorch fire does not spread to adjacent blocks and burns out in place.
-11. A tree exceeding `fell.max-blocks` stops at the cap and leaves the remainder standing.
-12. A wood structure wider than `fell.max-radius` is not fully consumed.
-13. A `BlockBreakEvent` cancelled by another plugin leaves that specific log standing while the rest of the fell proceeds.
-14. `/timberblast give` grants a functioning axe; `/timberblast reload` applies changed config without restart.
-15. Both admin commands are refused without `timberblast.admin`.
-16. **Bedrock/Geyser:** a Bedrock player crafts, receives, and swings the axe, and the fell triggers identically to Java. This check specifically confirms PDC identity survives the Geyser path — see limitations.
+9. Striking a leaf block does nothing special: no fell, no blast, no fire, no gunpowder consumed — identical to a vanilla axe.
+10. A tree exceeding `fell.max-blocks` stops at the cap and leaves the remainder standing.
+11. A wood structure wider than `fell.max-radius` is not fully consumed.
+12. A `BlockBreakEvent` cancelled by another plugin leaves that specific log standing while the rest of the fell proceeds.
+12a. Leaves are removed through the same cancellable break path as logs — a fell inside a protected claim strips no canopy the player could not break by hand.
+12b. A fell in which every log is vetoed costs the player nothing: no gunpowder consumed, no blast, no knockback, no durability loss.
+13. `/timberblast give` grants a functioning axe; `/timberblast reload` applies changed config without restart.
+14. Both admin commands are refused without `timberblast.admin`.
+15. **Bedrock/Geyser:** a Bedrock player crafts, receives, and swings the axe, and the fell triggers identically to Java. This check specifically confirms PDC identity survives the Geyser path — see limitations.
 
 ### Research findings settled at gate 1
 

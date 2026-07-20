@@ -250,6 +250,10 @@ Fell path in `FellExecutor`:
    vanilla sapling/stick/apple tables only where the player was allowed to break them.
    (Corrected 2026-07-20: the original plan broke leaves with no event, so a fully-vetoed
    fell inside a claim still stripped the canopy.)
+   **Cap the leaves broken at `fell.max-leaves` (default 256).** `fell.max-blocks` bounds
+   logs only, so without this a full jungle canopy dispatches several hundred synchronous
+   `BlockBreakEvent`s in one tick through every protection and logging plugin on the
+   server. Added 2026-07-20 after B2 changed the cost profile of a fell.
 6. Consume `fuel.amount` of `fuel.material` from the player's inventory.
 7. Create the explosion at the origin:
    `world.createExplosion(originLocation, (float) power, false, config.explosionBlockDamage())`

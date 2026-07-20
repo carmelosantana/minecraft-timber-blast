@@ -78,6 +78,7 @@ Alias: `/tb`. No player-facing commands — the axe is obtained by crafting.
 | `fell.max-radius` | int | `8` | 1–64; horizontal distance from struck trunk |
 | `fell.max-height` | int | `32` | 1–256; vertical distance from struck trunk |
 | `fell.drop-leaves` | bool | `true` | — |
+| `fell.max-leaves` | int | `256` | 0–4096; caps leaves broken per fell |
 | `fuel.material` | string | `GUNPOWDER` | must resolve to a valid `Material` |
 | `fuel.amount` | int | `1` | 1–64 |
 | `explosion.power` | float | `2.0` | 0.0–10.0 |

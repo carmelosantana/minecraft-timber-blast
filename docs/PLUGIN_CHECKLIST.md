@@ -155,12 +155,11 @@ No gates are withheld. Status is `active`; all twelve gates apply.
 
 ## 2. Repository
 
-- [ ] Repository is `carmelosantana/minecraft-<slug>` with an SSH `origin` and `main` branch.
-      **Partially complete.** `carmelosantana/minecraft-timber-blast` was created and
-      `origin` is set to `git@github.com:carmelosantana/minecraft-timber-blast.git`.
-      The local branch is `main` with one commit (`9afa7f9`), but `git push -u origin main`
-      was **blocked by the harness permission layer**, so the remote `main` does not exist
-      yet. Unblock the push and re-run to tick this.
+- [x] Repository is `carmelosantana/minecraft-<slug>` with an SSH `origin` and `main` branch.
+      `carmelosantana/minecraft-timber-blast`, `origin` =
+      `git@github.com:carmelosantana/minecraft-timber-blast.git`, default branch `main`.
+      Pushed by the user on 2026-07-20 after the harness blocked the agent's push;
+      local `main` tracks `origin/main` at `e9b878c`.
 - [x] Existing user-owned worktree changes were identified and preserved.
       No pre-existing worktree: the repository was created fresh at this gate. The only
       prior file was `docs/PLUGIN_CHECKLIST.md` from gate 1, which is preserved and committed.
@@ -168,12 +167,19 @@ No gates are withheld. Status is `active`; all twelve gates apply.
       `rg -n 'herobrinesystems' . --hidden -g '!target/**' -g '!.git/**'` returns only this
       checklist's own checkbox text — no real references.
 
-### Repository visibility — open decision
+### Repository visibility — OPEN, blocks gate 10
 
-The repository was created **private**. All ten sibling plugin repositories are `PUBLIC`,
-and `gh repo edit --visibility public` was **blocked by the harness permission layer**.
-This must be resolved before gate 10: the updater downloads release assets unauthenticated,
-so a private repository will fail updater enrollment even if every earlier gate passes.
+The repository is **`PRIVATE`** as of 2026-07-20. All ten sibling plugin repositories are
+`PUBLIC`. The agent created it private in error and `gh repo edit --visibility public` was
+blocked by the harness permission layer; the user's manual push did not change visibility.
+
+This must be resolved before gate 10. The updater downloads release assets unauthenticated,
+so a private repository fails updater enrollment even if every earlier gate is green. Fix:
+
+```bash
+gh repo edit carmelosantana/minecraft-timber-blast \
+  --visibility public --accept-visibility-change-consequences
+```
 
 ## 3. Metadata
 
@@ -234,8 +240,12 @@ so a private repository will fail updater enrollment even if every earlier gate 
       (`cd target && find . -maxdepth 1 ... -printf '%f\0' | ... sha256sum`), not the
       `target/`-prefixed variant `GITHUB_ACTIONS.md` documents as defective.
 - [ ] Successful main Actions run is recorded before tagging.
-      Not this skill's to tick — belongs to `minecraft-plugin-release` (gate 8b). Also
-      cannot occur yet: the first push to `main` was blocked, so CI has never run.
+      Not this skill's to tick — belongs to `minecraft-plugin-release` (gate 8b), and the
+      run it must record is one built from actual plugin code. For reference only, the
+      scaffold-only run [29761407704](https://github.com/carmelosantana/minecraft-timber-blast/actions/runs/29761407704)
+      on `e9b878c` concluded `success`, producing `timber-blast-1.0.0.jar` and a
+      `SHA256SUMS.txt` with bare filenames. That JAR contains **no plugin code** — there are
+      no Java sources yet — so it proves the workflow contract, not the plugin.
 - [x] Workflow permissions contain no broader access than the documented contract.
       `permissions: contents: write` only.
 

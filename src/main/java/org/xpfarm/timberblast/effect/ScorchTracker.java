@@ -50,6 +50,14 @@ import java.util.function.Predicate;
  * <p>A stale entry is never merely "wrong but harmless": the position could be
  * reoccupied by unrelated fire later, which this class would then wrongly claim as its
  * own. Eviction is a correctness rule, not just a memory one.
+ *
+ * <h2>Threading</h2>
+ *
+ * <p>Not thread safe, deliberately: a plain {@link HashSet} with no synchronisation. Every
+ * caller -- the leaf-hit path, the fire event handlers, plugin disable -- runs on the
+ * server's main thread, so there is nothing to contend for and a concurrent set would buy
+ * only overhead. Anything reaching this class from an async task must hop back onto the
+ * main thread first.
  */
 public final class ScorchTracker {
 
@@ -87,9 +95,14 @@ public final class ScorchTracker {
      * <p>A tracked position whose block is no longer fire is dropped here and reported
      * as not ours -- the fire we lit is gone, so anything at that position now belongs
      * to somebody else and must be left alone.
+     *
+     * @param pos must not be {@code null}. "No source block" is a question about an event,
+     *            not about this set, and it is answered by {@code ScorchService} before it
+     *            gets here; swallowing a null would only hide a caller that forgot.
      */
     public boolean isScorchFire(FirePos pos) {
-        if (pos == null || !tracked.contains(pos)) {
+        Objects.requireNonNull(pos, "pos");
+        if (!tracked.contains(pos)) {
             return false;
         }
         if (!stillBurning.test(pos)) {

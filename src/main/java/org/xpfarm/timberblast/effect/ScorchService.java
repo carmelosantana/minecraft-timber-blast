@@ -19,11 +19,13 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockSpreadEvent;
 import org.xpfarm.timberblast.config.TbConfig;
 
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -33,11 +35,37 @@ import java.util.function.Supplier;
  * <h2>The fire must not spread -- that is the feature</h2>
  *
  * <p>A player who mis-aims near spawn should singe a few leaves, not burn down a biome.
- * Containment works by tracking every fire this plugin lights and cancelling
- * {@link BlockSpreadEvent} and {@link BlockIgniteEvent} whose <b>source</b> block is one
- * of ours. Checking the source rather than the target is load bearing in both
- * directions: checking the target would leave scorch fire free to spread outward while
- * blocking unrelated legitimate fire from ever reaching a position we once lit.
+ * Containment works by tracking every fire this plugin lights and cancelling every event
+ * whose <b>source</b> block is one of ours. Checking the source rather than the target is
+ * load bearing in both directions: checking the target would leave scorch fire free to
+ * spread outward while blocking unrelated legitimate fire from ever reaching a position
+ * we once lit.
+ *
+ * <h2>All three escape routes, not one</h2>
+ *
+ * <p>Vanilla fire reaches a new block by three different events, and cancelling only some
+ * of them contains nothing:
+ *
+ * <ul>
+ *   <li>{@link BlockSpreadEvent} -- fire propagating into air.</li>
+ *   <li>{@link BlockIgniteEvent} -- a block being set alight, with the igniting block
+ *       named as the cause.</li>
+ *   <li>{@link BlockBurnEvent} -- vanilla {@code FireBlock} consuming an <em>adjacent
+ *       flammable</em> block and putting fire where it stood. This one is not optional:
+ *       scorch fire is placed directly above a leaf block, so it is <em>always</em>
+ *       adjacent to something flammable, and this is the path it will take first. A fire
+ *       created this way is not one we lit, so it is not tracked, so the other two
+ *       handlers would never match it -- containment would hold for exactly one block and
+ *       then leak with full vanilla behavior.</li>
+ * </ul>
+ *
+ * <p>Because a cancelled burn means the flammable block is never consumed and the
+ * replacement fire is never created, containment does not need to propagate outward:
+ * there is no untracked child fire to track. Every route from one of our fires to a new
+ * fire is refused at the source, so the depth is one by construction rather than by
+ * accident. The cost is that scorch fire does not actually consume the leaves it sits on
+ * -- it burns out and leaves them standing. For a cosmetic effect whose entire purpose is
+ * "do not destroy the terrain", that is the intended trade.
  *
  * <p>Nothing here blocks fire the plugin did not light. A campfire, a lava flow, or
  * another player's flint and steel spreads exactly as vanilla intends, because its
@@ -47,16 +75,31 @@ import java.util.function.Supplier;
  *
  * <p>{@code scorch.enabled = false} makes {@link #scorch} a no-op -- no fire, no sound,
  * no tracking. {@code scorch.spread = true} means the operator asked for vanilla fire:
- * the fire is still lit, but it is never registered, so nothing cancels its spread.
- * Both gates are read live through the config supplier so {@code /timberblast reload}
- * takes effect without rebuilding this object.
+ * the fire is still lit, but it is never registered, and the handlers additionally decline
+ * to cancel anything.
+ *
+ * <p>Both gates are read live, on every call, through the config supplier. That is a
+ * deliberate rejection of the cheaper alternative: deciding <em>once at enable</em>
+ * whether to register the listeners at all. A one-time registration decision fed by a
+ * reloadable value is a trap -- a {@code /timberblast reload} flipping {@code spread}
+ * from true to false would leave the listeners permanently unregistered, {@code scorch()}
+ * would go on tracking fires, and containment would be silently off with nothing to
+ * observe. The listeners are therefore always registered and always gate on the current
+ * value at handling time.
  *
  * <h2>Testability</h2>
  *
- * <p>The set bookkeeping lives in the Bukkit-free {@link ScorchTracker}, and the two
- * decisions -- {@link #shouldScorch} and {@link #shouldContainFire} -- are static
- * functions over primitives, so {@code ScorchServiceTest} pins them with no running
- * server. What is left in this class is Bukkit glue thin enough to read.
+ * <p>The set bookkeeping lives in the Bukkit-free {@link ScorchTracker}; the config gates
+ * {@link #shouldScorch} and {@link #shouldContainFire} are static functions over
+ * primitives; and the two decisions that combine them with tracker state --
+ * {@link #scorchInto} and {@link #shouldCancel} -- take {@link FirePos} and a callback
+ * rather than a {@code Block}. {@code ScorchServiceTest} therefore pins what the service
+ * decides <em>and</em> what it does about it, with no running server.
+ *
+ * <p>What is left is three one-line event adapters, each of which pulls the source block
+ * off its event and applies the answer. {@code ScorchListenerTest} drives those adapters
+ * with real event objects; see the task report for the residue that only gate 7a can
+ * cover.
  */
 public final class ScorchService implements Listener {
 
@@ -71,8 +114,18 @@ public final class ScorchService implements Listener {
      *                       rebuilding this object
      */
     public ScorchService(Supplier<TbConfig> configSupplier) {
+        this(configSupplier, ScorchService::isFireAt);
+    }
+
+    /**
+     * Test seam: the same service with a hand-built view of which positions still hold
+     * fire, so the decision methods can be exercised without a server.
+     *
+     * @param stillBurning see {@link ScorchTracker#ScorchTracker(Predicate)}
+     */
+    ScorchService(Supplier<TbConfig> configSupplier, Predicate<FirePos> stillBurning) {
         this.configSupplier = Objects.requireNonNull(configSupplier, "configSupplier");
-        this.tracker = new ScorchTracker(ScorchService::isFireAt);
+        this.tracker = new ScorchTracker(stillBurning);
     }
 
     // =================================================================================
@@ -117,32 +170,56 @@ public final class ScorchService implements Listener {
      */
     public void scorch(Block leafBlock) {
         Objects.requireNonNull(leafBlock, "leafBlock");
+        Block above = leafBlock.getRelative(BlockFace.UP);
+        scorchInto(posOf(above), above.getType().isAir(), () -> {
+            above.setType(Material.FIRE);
+            above.getWorld().playSound(above.getLocation(), Sound.ITEM_FLINTANDSTEEL_USE,
+                    SoundCategory.BLOCKS, SOUND_VOLUME, SOUND_PITCH);
+        });
+    }
+
+    /**
+     * The decision half of {@link #scorch}, over a position rather than a {@code Block}
+     * so it is testable: consult the live config, and if the strike should light a fire,
+     * run {@code ignite} and register the result for containment.
+     *
+     * @param pos        where the fire would go
+     * @param aboveIsAir whether that position is currently air
+     * @param ignite     lights the fire and plays the sound; run only if the gates pass
+     */
+    void scorchInto(FirePos pos, boolean aboveIsAir, Runnable ignite) {
         TbConfig config = configSupplier.get();
         boolean enabled = config.scorch().enabled();
-
-        Block above = leafBlock.getRelative(BlockFace.UP);
-        if (!shouldScorch(enabled, above.getType().isAir())) {
+        if (!shouldScorch(enabled, aboveIsAir)) {
             return;
         }
 
-        above.setType(Material.FIRE);
-        above.getWorld().playSound(above.getLocation(), Sound.ITEM_FLINTANDSTEEL_USE,
-                SoundCategory.BLOCKS, SOUND_VOLUME, SOUND_PITCH);
+        ignite.run();
 
         if (shouldContainFire(enabled, config.scorch().spread())) {
-            tracker.track(posOf(above));
+            tracker.track(pos);
         }
     }
 
     /**
-     * Whether the containment listeners are worth registering under the current config.
-     * Consulted by the plugin's enable path; with {@code spread = true} nothing is ever
-     * tracked, so registering the listeners would only add per-fire-tick work that can
-     * never match.
+     * Whether an event whose source block sits at {@code sourcePos} must be cancelled:
+     * the live config still asks for containment, and that block is a scorch fire of ours
+     * that is still burning.
+     *
+     * <p>{@code null} means the event named no source block at all -- a player's flint
+     * and steel, a lightning strike, an unknown burn cause. Those are never ours.
+     *
+     * @param sourcePos the source block's position, or {@code null} if the event has none
      */
-    public boolean shouldRegisterContainment() {
+    boolean shouldCancel(FirePos sourcePos) {
+        if (sourcePos == null) {
+            return false;
+        }
         TbConfig config = configSupplier.get();
-        return shouldContainFire(config.scorch().enabled(), config.scorch().spread());
+        if (!shouldContainFire(config.scorch().enabled(), config.scorch().spread())) {
+            return false;
+        }
+        return tracker.isScorchFire(sourcePos);
     }
 
     /** Forgets every tracked fire. Called on plugin disable. */
@@ -150,7 +227,11 @@ public final class ScorchService implements Listener {
         tracker.clear();
     }
 
-    /** How many scorch fires are currently tracked. Exposed for diagnostics. */
+    /**
+     * How many scorch fires are currently tracked. No production caller: this exists so
+     * tests can assert that a scorch was or was not registered, and so an operator
+     * debugging a containment report has something to read.
+     */
     public int trackedFireCount() {
         return tracker.size();
     }
@@ -159,10 +240,14 @@ public final class ScorchService implements Listener {
      * Fire spreading to a neighbouring block. {@code getSource()} is the burning block
      * doing the spreading; {@code getBlock()} is where the new fire would appear. We
      * match on the source -- see the class-level note on why that direction matters.
+     *
+     * <p>{@link EventPriority#HIGHEST} on all three handlers: this is a veto, not a
+     * preference. At {@code NORMAL} any plugin listening later could un-cancel it and the
+     * containment guarantee would not be a guarantee.
      */
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockSpread(BlockSpreadEvent event) {
-        if (tracker.isScorchFire(posOf(event.getSource()))) {
+        if (shouldCancel(posOfNullable(event.getSource()))) {
             event.setCancelled(true);
         }
     }
@@ -172,12 +257,28 @@ public final class ScorchService implements Listener {
      * behind them (a player's flint and steel, a lightning strike); those are never ours
      * and are left alone.
      */
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockIgnite(BlockIgniteEvent event) {
-        Block source = event.getIgnitingBlock();
-        if (source != null && tracker.isScorchFire(posOf(source))) {
+        if (shouldCancel(posOfNullable(event.getIgnitingBlock()))) {
             event.setCancelled(true);
         }
+    }
+
+    /**
+     * Vanilla fire consuming an adjacent flammable block and replacing it with fire. This
+     * is the route scorch fire takes first, because it is lit directly above a leaf; see
+     * the class-level note. The igniting block is null when the server does not attribute
+     * the burn to a specific fire, which means it is not attributable to us either.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockBurn(BlockBurnEvent event) {
+        if (shouldCancel(posOfNullable(event.getIgnitingBlock()))) {
+            event.setCancelled(true);
+        }
+    }
+
+    private static FirePos posOfNullable(Block block) {
+        return block == null ? null : posOf(block);
     }
 
     private static FirePos posOf(Block block) {

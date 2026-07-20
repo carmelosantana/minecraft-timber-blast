@@ -72,10 +72,13 @@ class ScorchTrackerTest {
     }
 
     @Test
-    void nullPosition_isNotOurs() {
+    void nullPosition_isRejectedRatherThanSilentlyAnsweredFalse() {
         light(0, 64, 0);
 
-        assertFalse(tracker.isScorchFire(null));
+        // A plain `contains(null)` would answer false all on its own, so a false-returning
+        // assertion here would pass with or without a guard and document nothing. The
+        // contract is that "no source block" is the caller's question to answer.
+        assertThrows(NullPointerException.class, () -> tracker.isScorchFire(null));
     }
 
     @Test

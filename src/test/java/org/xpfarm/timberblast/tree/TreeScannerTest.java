@@ -141,6 +141,27 @@ class TreeScannerTest {
     }
 
     @Test
+    void treeThatExactlyFillsTheCap_isNotReportedAsTruncated() {
+        ScanResult result = scanner.scan(at(0, 0, 0), new MapBlockQuery().trunk(0, 0, 0, 4),
+                4, MAX_RADIUS, MAX_HEIGHT);
+
+        assertEquals(4, result.logs().size());
+        assertFalse(result.truncated(), "the flag means blocks were left standing, not that the cap was reached");
+    }
+
+    @Test
+    void truncatedScan_stillReturnsTheLeavesFoundSoFar() {
+        MapBlockQuery world = new MapBlockQuery()
+                .trunk(0, 0, 0, 10)
+                .put(1, 1, 0, BlockKind.LEAF);
+
+        ScanResult result = scanner.scan(at(0, 0, 0), world, 3, MAX_RADIUS, MAX_HEIGHT);
+
+        assertTrue(result.truncated());
+        assertEquals(List.of(at(1, 1, 0)), result.leaves());
+    }
+
+    @Test
     void blocksBeyondMaxRadius_areExcluded() {
         MapBlockQuery world = new MapBlockQuery()
                 .put(0, 0, 0, BlockKind.LOG)

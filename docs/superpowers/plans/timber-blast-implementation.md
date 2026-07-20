@@ -250,6 +250,12 @@ Fell path in `FellExecutor`:
    `explosion.knockback-multiplier`, directed away from the origin.
 9. Damage the item's durability by 1 using the normal Bukkit damage path.
 
+`CraftPermissionListener` on `PrepareItemCraftEvent`: if the recipe being prepared is
+the Timber Blast recipe and the viewing player lacks `timberblast.craft`, clear the
+result so the craft cannot complete. This node is declared in `plugin.yml` and in §1
+of the checklist but was unenforced — added here because it is listener work and this
+is the listener task.
+
 `WielderDamageListener` on `EntityDamageEvent`: when the entity is a player this
 plugin just knocked back and the cause is `BLOCK_EXPLOSION` or `ENTITY_EXPLOSION`,
 call `event.setDamage(0)`. **Never `setCancelled(true)`** — see Settled API Fact 1.

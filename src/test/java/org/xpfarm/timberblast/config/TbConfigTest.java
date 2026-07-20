@@ -72,9 +72,6 @@ class TbConfigTest {
         assertTrue(config.coal().enabled());
         assertEquals("COAL", config.coal().material());
 
-        assertTrue(config.scorch().enabled());
-        assertFalse(config.scorch().spread());
-
         assertTrue(warnings.isEmpty(), () -> "defaults must not warn, got " + warnings);
     }
 
@@ -91,9 +88,7 @@ class TbConfigTest {
                 .with("explosion.block-damage", true)
                 .with("explosion.knockback-multiplier", 0.25)
                 .with("coal.enabled", false)
-                .with("coal.material", "CHARCOAL")
-                .with("scorch.enabled", false)
-                .with("scorch.spread", true));
+                .with("coal.material", "CHARCOAL"));
 
         assertEquals(512, config.fell().maxBlocks());
         assertEquals(12, config.fell().maxRadius());
@@ -106,8 +101,6 @@ class TbConfigTest {
         assertEquals(0.25, config.explosion().knockbackMultiplier());
         assertFalse(config.coal().enabled());
         assertEquals("CHARCOAL", config.coal().material());
-        assertFalse(config.scorch().enabled());
-        assertTrue(config.scorch().spread());
 
         assertTrue(warnings.isEmpty(), () -> "valid values must not warn, got " + warnings);
     }
@@ -215,18 +208,18 @@ class TbConfigTest {
     void unparseableBoolean_warnsAndFallsBackToDefault() {
         TbConfig config = load(MapConfigSource.empty()
                 .with("fell.drop-leaves", "yes-please")
-                .with("scorch.spread", "nope"));
+                .with("coal.enabled", "nope"));
 
         assertTrue(config.fell().dropLeaves());
-        assertFalse(config.scorch().spread());
+        assertTrue(config.coal().enabled());
 
         assertEquals(2, warnings.size(), () -> "one warning per unreadable key, got " + warnings);
         assertTrue(warnings.stream().anyMatch(w -> w.contains("fell.drop-leaves") && w.contains("yes-please")
                         && w.contains("true")),
                 () -> "fell.drop-leaves must be reported with its value and default, got " + warnings);
-        assertTrue(warnings.stream().anyMatch(w -> w.contains("scorch.spread") && w.contains("nope")
-                        && w.contains("false")),
-                () -> "scorch.spread must be reported with its value and default, got " + warnings);
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("coal.enabled") && w.contains("nope")
+                        && w.contains("true")),
+                () -> "coal.enabled must be reported with its value and default, got " + warnings);
     }
 
     // ---- materials -----------------------------------------------------------------

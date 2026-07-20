@@ -43,9 +43,3 @@ coal:
   # registry. An unknown name falls back to COAL.
   material: COAL
 
-scorch:
-  # Whether the ground around the felled tree is visually scorched.
-  enabled: true
-  # Whether the scorch places real fire that can spread. Off by default -- leaving
-  # this on lets a fell burn down a forest.
-  spread: false

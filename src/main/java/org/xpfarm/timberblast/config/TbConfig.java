@@ -29,14 +29,12 @@ import java.util.function.Function;
  * @param fuel      validated {@code fuel} section
  * @param explosion validated {@code explosion} section
  * @param coal      validated {@code coal} section
- * @param scorch    validated {@code scorch} section
  */
 public record TbConfig(
         FellSettings fell,
         FuelSettings fuel,
         ExplosionSettings explosion,
-        CoalSettings coal,
-        ScorchSettings scorch
+        CoalSettings coal
 ) {
 
     /** Default for {@code fuel.material}, per the shipping {@code config.yml}. */
@@ -91,11 +89,6 @@ public record TbConfig(
                         materialValidator, DEFAULT_COAL_MATERIAL, warn)
         );
 
-        ScorchSettings scorch = new ScorchSettings(
-                source.getBoolean("scorch.enabled", true),
-                source.getBoolean("scorch.spread", false)
-        );
-
-        return new TbConfig(fell, fuel, explosion, coal, scorch);
+        return new TbConfig(fell, fuel, explosion, coal);
     }
 }

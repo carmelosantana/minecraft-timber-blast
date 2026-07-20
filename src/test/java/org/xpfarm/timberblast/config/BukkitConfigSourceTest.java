@@ -71,7 +71,7 @@ class BukkitConfigSourceTest {
 
         assertEquals(8, source.getInt("fell.max-radius", 8));
         assertEquals(1.0, source.getDouble("explosion.knockback-multiplier", 1.0));
-        assertFalse(source.getBoolean("scorch.spread", false));
+        assertTrue(source.getBoolean("coal.enabled", true));
 
         assertTrue(warnings.isEmpty(), () -> "a missing key is not a typo, got " + warnings);
     }

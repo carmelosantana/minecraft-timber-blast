@@ -9,6 +9,7 @@
  */
 package org.xpfarm.timberblast.testsupport;
 
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 
@@ -50,6 +51,30 @@ public final class FakeBlocks {
                 "getX", x,
                 "getY", y,
                 "getZ", z));
+    }
+
+    /** As {@link #at(String, int, int, int)}, but the block also reports {@code material}. */
+    public static Block at(String world, int x, int y, int z, Material material) {
+        World w = proxy(World.class, "the world", Map.of("getName", world));
+        return proxy(Block.class, "the " + material + " at " + world + " " + x + "," + y + "," + z, Map.of(
+                "getWorld", w,
+                "getX", x,
+                "getY", y,
+                "getZ", z,
+                "getType", material));
+    }
+
+    /**
+     * The same throw-on-anything-unfaked proxy for any Bukkit interface -- {@code Player},
+     * {@code World}, {@code DamageSource} and friends -- so listener tests can build real
+     * Bukkit event objects without a server and without a mocking library.
+     *
+     * @param type    the interface to implement
+     * @param label   what this stands for, used in {@code toString} and in failure messages
+     * @param answers method name to fixed return value; every other method throws
+     */
+    public static <T> T stub(Class<T> type, String label, Map<String, Object> answers) {
+        return proxy(type, label, answers);
     }
 
     private static <T> T proxy(Class<T> type, String label, Map<String, Object> answers) {

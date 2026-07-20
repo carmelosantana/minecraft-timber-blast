@@ -42,8 +42,13 @@ class TbConfigTest {
         warnings.add(message);
     }
 
-    private TbConfig load(ConfigSource source) {
-        return TbConfig.load(source, VALIDATOR, this::warn);
+    /**
+     * Loads through {@code source} with every warning -- the source's own complaints about
+     * unreadable values as well as {@code TbConfig}'s range and material rejections --
+     * collected into {@link #warnings}.
+     */
+    private TbConfig load(MapConfigSource source) {
+        return TbConfig.load(source.warnTo(this::warn), VALIDATOR, this::warn);
     }
 
     // ---- defaults ------------------------------------------------------------------
@@ -180,33 +185,48 @@ class TbConfigTest {
         assertSingleWarningNaming(bound.key(), bound.text(bound.max() + 1), bound.text(bound.def()));
     }
 
-    @ParameterizedTest(name = "{0} falls back on an unparseable string")
+    @ParameterizedTest(name = "{0} warns and falls back on an unparseable string")
     @MethodSource("bounds")
-    void unparseableString_fallsBackToDefault(Bound bound) {
+    void unparseableString_warnsAndFallsBackToDefault(Bound bound) {
         TbConfig config = load(MapConfigSource.of(bound.key(), "not-a-number"));
 
         assertEquals(bound.def(), bound.reader().apply(config));
+        assertSingleWarningNaming(bound.key(), "not-a-number", bound.text(bound.def()));
     }
 
-    @ParameterizedTest(name = "{0} accepts a numeric string")
+    /**
+     * A quoted YAML number is a {@code String}, and {@code MemorySection.getInt} accepts
+     * only a {@code Number} -- so {@code max-blocks: "4096"} is rejected, not coerced.
+     * Pinned deliberately: it is the surprising half of the contract, and an operator who
+     * quotes a number deserves to be told rather than silently defaulted.
+     */
+    @ParameterizedTest(name = "{0} rejects a quoted numeric string")
     @MethodSource("bounds")
-    void numericString_isCoercedAndAccepted(Bound bound) {
+    void numericString_isRejectedAndWarns(Bound bound) {
         TbConfig config = load(MapConfigSource.of(bound.key(), bound.text(bound.max())));
 
-        assertEquals(bound.max(), bound.reader().apply(config));
-        assertTrue(warnings.isEmpty(), () -> "an in-range numeric string must not warn, got " + warnings);
+        assertEquals(bound.def(), bound.reader().apply(config));
+        assertSingleWarningNaming(bound.key(), bound.text(bound.max()), bound.text(bound.def()));
     }
 
     // ---- booleans ------------------------------------------------------------------
 
     @Test
-    void unparseableBoolean_fallsBackToDefault() {
+    void unparseableBoolean_warnsAndFallsBackToDefault() {
         TbConfig config = load(MapConfigSource.empty()
                 .with("fell.drop-leaves", "yes-please")
                 .with("scorch.spread", "nope"));
 
         assertTrue(config.fell().dropLeaves());
         assertFalse(config.scorch().spread());
+
+        assertEquals(2, warnings.size(), () -> "one warning per unreadable key, got " + warnings);
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("fell.drop-leaves") && w.contains("yes-please")
+                        && w.contains("true")),
+                () -> "fell.drop-leaves must be reported with its value and default, got " + warnings);
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("scorch.spread") && w.contains("nope")
+                        && w.contains("false")),
+                () -> "scorch.spread must be reported with its value and default, got " + warnings);
     }
 
     // ---- materials -----------------------------------------------------------------

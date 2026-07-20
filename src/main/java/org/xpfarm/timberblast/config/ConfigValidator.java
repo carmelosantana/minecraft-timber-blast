@@ -65,6 +65,22 @@ public final class ConfigValidator {
         return candidate;
     }
 
+    /**
+     * Reports a key that is present in the configuration but whose stored value cannot be
+     * read as the requested type -- an operator typo such as {@code max-blocks: "lots"}.
+     * Detecting this is the {@link ConfigSource} implementation's job (only it can see the
+     * raw value); phrasing the warning lives here so every rejection reads alike.
+     *
+     * @param key      the dotted configuration path
+     * @param value    the raw, uncoercible value as stored
+     * @param fallback the default being substituted
+     * @param warn     the warning sink
+     */
+    public static void reportUnreadable(String key, Object value, Object fallback, Consumer<String> warn) {
+        warn.accept("TimberBlast config: key '" + key + "' has unreadable value '" + value
+                + "'; using default '" + fallback + "' instead.");
+    }
+
     private static String outOfRangeMessage(String key, Object value, Object min, Object max, Object fallback) {
         return "TimberBlast config: key '" + key + "' has out-of-range value '" + value
                 + "' (must be between " + min + " and " + max + "); using default '" + fallback + "' instead.";

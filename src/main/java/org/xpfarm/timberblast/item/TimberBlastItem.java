@@ -128,9 +128,31 @@ public final class TimberBlastItem {
      * @return {@code true} if the recipe is now registered
      */
     public boolean registerRecipe() {
+        return registerRecipe(false);
+    }
+
+    /**
+     * As {@link #registerRecipe()}, but choosing whether already-connected clients are
+     * told about the change.
+     *
+     * <p>The single-argument {@code Bukkit.removeRecipe}/{@code addRecipe} forms update the
+     * server only: a player who was online across a {@code /timberblast reload} keeps the
+     * pre-reload entry in their client-side recipe book until they relog. The
+     * {@code resendRecipes} forms push the new recipe set to every connected player.
+     *
+     * @param resendRecipes {@code true} to resend the recipe book to all connected players;
+     *                      pass {@code false} on plugin enable, where there is nobody to
+     *                      resend to, and {@code true} on reload, where there is
+     * @return {@code true} if the recipe is now registered
+     */
+    public boolean registerRecipe(boolean resendRecipes) {
         try {
-            Bukkit.removeRecipe(recipeKey);
-            return Bukkit.addRecipe(buildRecipe());
+            // Removed first unconditionally: Bukkit.addRecipe throws on a duplicate key and
+            // recipes outlive a /timberblast reload. The removal does not resend even when
+            // asked to -- the add that immediately follows does, and resending twice would
+            // briefly show every player a recipe book without this recipe in it.
+            Bukkit.removeRecipe(recipeKey, false);
+            return Bukkit.addRecipe(buildRecipe(), resendRecipes);
         } catch (Throwable t) {
             plugin.getLogger().warning("Could not register the crafting recipe ("
                     + t.getClass().getName() + ": " + t.getMessage()

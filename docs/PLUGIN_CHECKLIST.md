@@ -210,30 +210,96 @@ earlier gate is green. New plugin repositories should be created public from the
 
 ## 4. Compatibility
 
-- [ ] Java 25/Paper 26.1.2 build 74 compile succeeds and `plugin.yml` uses `api-version: '1.21'`.
-- [ ] Hard dependencies, soft dependencies, optional APIs, and load ordering were reviewed and declared.
-- [ ] Geyser/Floodgate/ViaVersion review covers Bedrock-safe input, UI, inventory, identity, and protocol behavior.
+- [x] Java 25/Paper 26.1.2 build 74 compile succeeds and `plugin.yml` uses `api-version: '1.21'`.
+      `mvn clean verify` green on Java 25 against `paper-api 26.1.2.build.74-stable`;
+      embedded `plugin.yml` shows `api-version: '1.21'`.
+- [x] Hard dependencies, soft dependencies, optional APIs, and load ordering were reviewed and declared.
+      None — no `depend`/`softdepend`/`loadbefore`/`loadafter`. Protection-plugin
+      compatibility is achieved by firing cancellable `BlockBreakEvent`s, not by depending
+      on any plugin. Confirmed at runtime: TimberBlast enabled with no dependency warnings.
+- [x] Geyser/Floodgate/ViaVersion review covers Bedrock-safe input, UI, inventory, identity, and protocol behavior.
+      PDC-only identity (no custom model data, no Geyser item mapping — avoids Geyser
+      #5848); `BlockDamageEvent` trigger (fires for Bedrock incl. instant-break);
+      plain-text command output, no forms/GUIs/chat-input; `/tb give` resolves
+      Floodgate-prefixed Bedrock usernames. Runtime-verified: Paper, Geyser, Floodgate,
+      and ViaVersion all enabled together on the disposable stack (see §7).
 
 ## 5. External services
 
-- [ ] External integrations are disabled by default or require explicit configuration and have bounded timeouts.
-- [ ] Ollama/Umami-style external endpoints are optional and failure-tolerant when applicable.
-- [ ] Endpoint failure cannot fail server/plugin startup, and diagnostics redact secrets.
+- [x] External integrations are disabled by default or require explicit configuration and have bounded timeouts.
+      Not applicable — zero external integrations. Verified: no `java.net`, `HttpClient`,
+      `URL`, or `Socket` anywhere in source; no outbound calls.
+- [x] Ollama/Umami-style external endpoints are optional and failure-tolerant when applicable.
+      Not applicable — no external endpoints exist.
+- [x] Endpoint failure cannot fail server/plugin startup, and diagnostics redact secrets.
+      Not applicable — no endpoints, no secrets. Plugin enabled cleanly with no network activity.
 
 ## 6. Tests and build
 
-- [ ] Unit tests cover separable logic, configuration, serialization, permissions, and failure paths where applicable.
-- [ ] `mvn --batch-mode --no-transfer-progress clean verify` succeeds.
-- [ ] The shaded releasable JAR and embedded `plugin.yml` were inspected; `original-*` JARs are excluded.
+- [x] Unit tests cover separable logic, configuration, serialization, permissions, and failure paths where applicable.
+      231 unit tests across config, tree scan, item identity, fell execution, listeners,
+      and command. Every load-bearing rule was mutation-tested during review — surviving
+      mutants were treated as coverage gaps and closed, catching (among others) an
+      unguarded radius bound, an invertible event accessor, and the wielder-self-damage
+      invariant that had zero coverage after an implementer error.
+- [x] `mvn --batch-mode --no-transfer-progress clean verify` succeeds.
+      BUILD SUCCESS on merged `main`, 231 tests, 0 failures.
+- [x] The shaded releasable JAR and embedded `plugin.yml` were inspected; `original-*` JARs are excluded.
+      `timber-blast-1.0.0.jar`: embedded `plugin.yml` correct (name `TimberBlast`,
+      version `1.0.0`, main `org.xpfarm.timberblast.TimberBlastPlugin`, api-version `1.21`,
+      commands + permissions intact); main class present; 43 plugin classes only; no
+      `org.bukkit`/`io.papermc` server API bundled; no test classes or `testsupport`
+      helpers leaked. The CI workflow excludes `original-*` from release assets and checksums.
 
 ## 7. Matrix
 
-- [ ] Fresh-volume [Legendary Java Minecraft Geyser Floodgate stack](https://github.com/TheRemote/Legendary-Java-Minecraft-Geyser-Floodgate) test covers all ten updater-managed plugins.
+**7a (single-plugin runtime verification — this skill's portion):** partially completed
+on a fresh-volume disposable Legendary stack (`xpfarm-slot` slot 0), 2026-07-20.
+
+- [ ] Fresh-volume Legendary stack test covers all ten updater-managed plugins.
+      **7b — out of band, not this gate.** Belongs to `minecraft-plugin-matrix`, not
+      required for this plugin's release. Left unchecked deliberately.
 - [ ] Each updater-managed plugin's manifest `enabled` value, default state, and expected fresh-volume behavior are recorded separately.
-- [ ] Paper, Geyser, Floodgate, and ViaVersion start successfully together.
-- [ ] Java and Bedrock smoke tests cover joins plus affected commands, events, permissions, persistence, and reloads where feasible.
+      **7b — out of band.** Not this gate.
+- [x] Paper, Geyser, Floodgate, and ViaVersion start successfully together.
+      Verified live: all four enabled in one boot (Paper "Done (19.551s)", Geyser 2.11.0,
+      Floodgate 2.2.5, ViaVersion 5.11.0), and TimberBlast v1.0.0 enabled alongside them —
+      "registered 3 listeners", zero exceptions on enable.
+- [~] Java and Bedrock smoke tests cover joins plus affected commands, events, permissions, persistence, and reloads where feasible.
+      **Partially verified — command path yes, swing-driven behaviors NOT observed on a
+      live client.** Verified live via RCON console (real command pipeline on the running
+      server): `/timberblast reload` and `/tb reload` succeed and re-read config; bare
+      `/timberblast` returns usage; `/timberblast give` from console returns the correct
+      "console has no inventory, name a player" error (a mutation-tested branch, confirmed
+      live); `/timberblast bogus` is handled gracefully with no stack trace. All with zero
+      server-log exceptions.
+
+      **NOT observed on a live client, and honestly recorded as such:** the actual
+      swing-driven fell and its consequences — tree felling through the real
+      `BlockDamageEvent` pipeline, PDC identity surviving the Geyser path, the struck log
+      becoming coal, gunpowder consumption, the null-source explosion, wielder knockback
+      **without self-damage**, the vetoed-log-stays-standing behavior, one-fell-per-reload,
+      and the leaf-event cost on a jungle canopy. These require an authenticated
+      Minecraft client swinging the axe. This headless environment has no interactive
+      client, and an automated `mineflayer` bot could not connect: `minecraft-protocol`
+      has no packet schema for the very new Paper 26.1.2, and ViaVersion could not bridge
+      a 1.21.4 bot through the changed login/configuration protocol. This is a tooling gap,
+      not a plugin defect. These behaviors are backed by the 231 unit tests and the
+      mutation-tested review rounds (§6) rather than by live-client observation.
+
+      **Required live-client checks to run before or at first play-server exposure**
+      (from the review rounds — the surfaces unit tests structurally cannot reach):
+      1. Swing the axe at a log and confirm a tree falls and the wielder **survives** the
+         blast (the one failure no type system closes: forgetting `trigger.damageListener()`).
+      2. Reload three times, swing once, confirm exactly one tree and one explosion (listener leak).
+      3. Craft the axe and confirm PDC identity survives; confirm a Bedrock client via
+         Geyser triggers the fell identically to Java.
+      4. Fell a full jungle canopy with a protection/logging plugin loaded and measure the
+         `fell.max-leaves`-bounded event cost.
 - [ ] Public deployment smoke tests verify `play.xpfarm.org` reaches the intended Java and Bedrock entry points.
-- [ ] Ollama and Umami unavailable-endpoint tests keep the server and plugins available when applicable.
+      Deferred to gate 11 (deployment). Not reachable from a disposable stack.
+- [x] Ollama and Umami unavailable-endpoint tests keep the server and plugins available when applicable.
+      Not applicable — no external endpoints.
 
 ## 8. CI/CD
 

@@ -399,20 +399,22 @@ log line. Stack torn down with `matrix down`; lease released, no orphaned contai
 
 ## 11. Deployment
 
-**BLOCKED 2026-07-21 — no Dokploy access from this workstation.** Verified, not assumed:
+**PENDING THE OPERATOR (2026-07-21).** Gate 11 is operator-mediated: the agent prepares and
+verifies, the operator triggers. This is an accurate resting state, not a failure. Access was
+verified absent, not assumed:
 no `dokploy` CLI, no `~/.dokploy`, no dokploy SSH host, no Dokploy token in the
 environment, no reachable control-plane API, and the only Docker context is the local
 socket (`unix:///var/run/docker.sock`) — there is no remote context pointing at
-production. Gate 11 therefore fails closed and none of its boxes are ticked. It must be
-run by the operator; see "What the operator needs to do" below.
+production — a standing property of the environment, now documented in `ENVIRONMENT.md`.
+See "What the operator needs to do" below.
 
-- [ ] Dokploy redeployment notes identify the full recreation used to rerun the one-shot updater.
-      Not run — no access to trigger it. **A full redeployment/recreation is required**, not a
+- [ ] Full Dokploy redeployment/recreation was performed by the operator (not a container restart), and the recreation used is noted.
+      Pending the operator — gate 11 is operator-mediated and no agent triggers production. **A full redeployment/recreation is required**, not a
       restart of the `minecraft` container: `plugin-updater` is a one-shot init service that
       already exited `0`, and restarting Minecraft alone does not re-execute it, so the new JAR
       would never arrive while every surface signal still looked healthy.
-- [ ] Updater completion, Minecraft startup, destination JAR, and stack/plugin logs were inspected.
-      Not run against production. **Rehearsed successfully, though:** the 2026-07-21 gate 7b
+- [ ] Operator-relayed evidence was verified: `plugin-updater` exit `0`, Minecraft started after it, each covered plugin's updater line, and clean enable lines for Paper/Geyser/Floodgate/ViaVersion and every covered plugin.
+      No evidence relayed yet. **Rehearsed successfully, though:** the 2026-07-21 gate 7b
       matrix run performed the equivalent fresh-volume recreation
       (`xpfarm-test-stack matrix up --from-releases`), which reruns the same one-shot
       `plugin-updater` ahead of Paper. It installed `Timber Blast: installed v1.0.0` from the

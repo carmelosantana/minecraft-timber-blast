@@ -312,22 +312,26 @@ on a fresh-volume disposable Legendary stack (`xpfarm-slot` slot 0), 2026-07-20.
       Checksum generation uses the corrected bare-filename form
       (`cd target && find . -maxdepth 1 ... -printf '%f\0' | ... sha256sum`), not the
       `target/`-prefixed variant `GITHUB_ACTIONS.md` documents as defective.
-- [ ] Successful main Actions run is recorded before tagging.
-      Not this skill's to tick — belongs to `minecraft-plugin-release` (gate 8b), and the
-      run it must record is one built from actual plugin code. For reference only, the
-      scaffold-only run [29761407704](https://github.com/carmelosantana/minecraft-timber-blast/actions/runs/29761407704)
-      on `e9b878c` concluded `success`, producing `timber-blast-1.0.0.jar` and a
-      `SHA256SUMS.txt` with bare filenames. That JAR contains **no plugin code** — there are
-      no Java sources yet — so it proves the workflow contract, not the plugin.
+- [x] Successful main Actions run is recorded before tagging.
+      Run [29778591066](https://github.com/carmelosantana/minecraft-timber-blast/actions/runs/29778591066)
+      on `7f76f66` (the tagged commit) concluded `success`, built from the full plugin
+      source with all 231 tests passing. This is the run built from actual plugin code —
+      superseding the earlier scaffold-only run.
 - [x] Workflow permissions contain no broader access than the documented contract.
       `permissions: contents: write` only.
 
 ## 9. Release
 
-- [ ] Semantic version matches the POM, plugin metadata, and `v<version>` tag.
-- [ ] Successful tag Actions run and GitHub release are recorded.
-- [ ] Release contains exactly one updater-matching JAR plus `SHA256SUMS.txt` and no `original-*` JAR.
-- [ ] Downloaded release assets pass `sha256sum --check SHA256SUMS.txt`.
+- [x] Semantic version matches the POM, plugin metadata, and `v<version>` tag.
+      `1.0.0` in `pom.xml`, embedded `plugin.yml` (`version: '1.0.0'`), and tag `v1.0.0`.
+- [x] Successful tag Actions run and GitHub release are recorded.
+      Tag run [29790862820](https://github.com/carmelosantana/minecraft-timber-blast/actions/runs/29790862820)
+      concluded `success`; release [v1.0.0](https://github.com/carmelosantana/minecraft-timber-blast/releases/tag/v1.0.0)
+      published, stable (prerelease=false, draft=false).
+- [x] Release contains exactly one updater-matching JAR plus `SHA256SUMS.txt` and no `original-*` JAR.
+      Assets: `timber-blast-1.0.0.jar` (61426 b) + `SHA256SUMS.txt` (89 b). No `original-*`.
+- [x] Downloaded release assets pass `sha256sum --check SHA256SUMS.txt`.
+      `timber-blast-1.0.0.jar: OK`.
 
 ## 10. Updater
 

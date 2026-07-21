@@ -335,10 +335,27 @@ on a fresh-volume disposable Legendary stack (`xpfarm-slot` slot 0), 2026-07-20.
 
 ## 10. Updater
 
-- [ ] Updater manifest/tests cover repository, destination, anchored asset regex, legacy globs, enabled state, and optional pin.
-- [ ] Fresh install, upgrade, no-op, legacy archival, endpoint failure, and checksum failure behaviors pass.
-- [ ] Updater dry-run uses a disposable directory and never a production plugin directory.
-- [ ] Failure retains the installed JAR and default fail-open behavior permits Minecraft startup.
+- [x] Updater manifest/tests cover repository, destination, anchored asset regex, legacy globs, enabled state, and optional pin.
+      `plugins.json` entry: repo `carmelosantana/minecraft-timber-blast`, destination
+      `timber-blast.jar`, `asset_regex` `^timber-blast-[0-9].*\.jar$` (verified to select
+      `timber-blast-1.0.0.jar` only, rejecting `original-*`, `SHA256SUMS.txt`, and the
+      destination name), `legacy_globs` `["timber-blast-[0-9]*.jar"]`, enabled by default
+      (no `enabled` key = true, matching siblings), no pin. `json.tool` valid; 13 unit tests pass.
+      Committed `6065b03` in `carmelosantana/minecraft-plugin-updater`.
+- [x] Fresh install, upgrade, no-op, legacy archival, endpoint failure, and checksum failure behaviors pass.
+      Exercised against a disposable sandbox: fresh install ("installed v1.0.0", 61426 b);
+      no-op ("already current (v1.0.0)"); replacement of stale bytes (reinstalled + backup
+      written); legacy archival (`timber-blast-0.9.0.jar` matched the glob and moved to
+      backups as `.legacy.bak`); endpoint failure (404 on a bogus repo → warn-and-continue,
+      exit 0); checksum failure via `test_bad_checksum_preserves_installed_jar` (passes).
+- [x] Updater dry-run uses a disposable directory and never a production plugin directory.
+      All runs used `/tmp/minecraft-plugin-updater-dry-run` and `/tmp/mc-upd-tb*` with
+      `--plugins-dir`, `--state-file`, and `--backup-dir` all inside the sandbox root.
+      No path touched `/minecraft`. Sandboxes discarded after.
+- [x] Failure retains the installed JAR and default fail-open behavior permits Minecraft startup.
+      Confirmed: after the 404 failure the installed `timber-blast.jar` SHA was byte-identical
+      before and after, and the run exited 0 (fail-open) — a plugin-level failure never aborts
+      the batch or blocks startup.
 
 ## 11. Deployment
 

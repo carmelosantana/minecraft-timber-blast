@@ -405,6 +405,37 @@ log line. Stack torn down with `matrix down`; lease released, no orphaned contai
 
 ## 12. Handoff
 
-- [ ] Current-state documentation refreshed with release, CI, updater, deployment, and local pending state.
-- [ ] Known limitations, skipped checks, configuration or migration notes, rollback guidance, and follow-up owner are recorded.
-- [ ] Evidence distinguishes source commit, published tag/release, updater state, and deployed state without exposing secrets.
+- [~] Current-state documentation refreshed with release, CI, updater, deployment, and local pending state.
+      **Partial — deployment state is recorded as NOT DEPLOYED, which is accurate but not complete.**
+      `xpfarm-plugin-toolkit/CURRENT_STATE.md` commit `b6cdfca` records the release row, both CI
+      runs, the updater enrollment, the 2026-07-21 12/12 matrix run, and a clean local-pending
+      state. It also records, under `## Deployment Status`, that this plugin is **enrolled but not
+      deployed** — gate 11 has never run. This box cannot be fully ticked until it has.
+- [x] Known limitations, skipped checks, configuration or migration notes, rollback guidance, and follow-up owner are recorded.
+      Limitations carried from §1 (no cooldown; overworld logs only; vanilla leaf drop rates; the
+      Widowmaker TNT tier deliberately deferred). Skipped checks named explicitly rather than
+      omitted: no client join, and each unexercised behavior listed by name under
+      `## Client Play-Test Obligation`. No external services, so there are no endpoint assumptions.
+      Configuration note: `fell.max-leaves` was added late, after routing leaves through the
+      cancellable break path changed the cost profile of a fell. No migration is required — this is
+      the first release and there is no prior deployed state. **Rollback:** nothing is deployed, so
+      rollback today means removing the `plugins.json` entry (revert `6065b03`) before the next
+      redeployment; once deployed, rollback requires pinning the manifest entry to a prior tag and
+      running a **full** Dokploy redeployment, since restarting the Minecraft container alone will
+      not rerun a completed updater. **Follow-up owner: Carmelo Santana.**
+- [x] Evidence distinguishes source commit, published tag/release, updater state, and deployed state without exposing secrets.
+      Source: `main` at `ce1323d`, working tree clean, nothing unpushed. Published: tag `v1.0.0` on
+      commit `7f76f66`, release stable/non-draft, `main` run `29778591066` and tag run
+      `29790862820` both `completed/success`. Updater: enrolled in `plugins.json` at commit
+      `6065b03`, destination `timber-blast.jar`, `enabled` absent (= true), no pin. Deployed:
+      **none** — gate 11 not run. Test environments are named per observation (disposable Legendary
+      rig vs. the production `play.xpfarm.org` reachability check) so neither is mistaken for the
+      other. No secrets or raw log excerpts were recorded anywhere.
+
+### Client play-test obligation — OPEN
+
+Owner **Carmelo Santana**, target **2026-07-28**, status **NOT RUN**. Seven named behaviors are
+listed in `xpfarm-plugin-toolkit/CURRENT_STATE.md` under `## Client Play-Test Obligation`; the
+highest-risk is that the wielder must **survive** their own blast. Items 1–5 and 7 become
+automatable once the RCON test-harness plugin exists; the Bedrock *rendering* half of item 6
+never will be.

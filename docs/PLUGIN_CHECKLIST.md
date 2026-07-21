@@ -399,9 +399,46 @@ log line. Stack torn down with `matrix down`; lease released, no orphaned contai
 
 ## 11. Deployment
 
+**BLOCKED 2026-07-21 — no Dokploy access from this workstation.** Verified, not assumed:
+no `dokploy` CLI, no `~/.dokploy`, no dokploy SSH host, no Dokploy token in the
+environment, no reachable control-plane API, and the only Docker context is the local
+socket (`unix:///var/run/docker.sock`) — there is no remote context pointing at
+production. Gate 11 therefore fails closed and none of its boxes are ticked. It must be
+run by the operator; see "What the operator needs to do" below.
+
 - [ ] Dokploy redeployment notes identify the full recreation used to rerun the one-shot updater.
+      Not run — no access to trigger it. **A full redeployment/recreation is required**, not a
+      restart of the `minecraft` container: `plugin-updater` is a one-shot init service that
+      already exited `0`, and restarting Minecraft alone does not re-execute it, so the new JAR
+      would never arrive while every surface signal still looked healthy.
 - [ ] Updater completion, Minecraft startup, destination JAR, and stack/plugin logs were inspected.
+      Not run against production. **Rehearsed successfully, though:** the 2026-07-21 gate 7b
+      matrix run performed the equivalent fresh-volume recreation
+      (`xpfarm-test-stack matrix up --from-releases`), which reruns the same one-shot
+      `plugin-updater` ahead of Paper. It installed `Timber Blast: installed v1.0.0` from the
+      published release asset and Paper enabled `TimberBlast` alongside the other eleven, with
+      zero exceptions and no secrets in logs. That proves the mechanism and the asset; it does
+      not prove production was redeployed.
 - [ ] No production plugin hot reload was used.
+      Vacuously true — nothing was done to production at all. Recorded as unticked rather than
+      ticked, because ticking it would imply a deployment happened and merely avoided hot reload.
+
+### What the operator needs to do
+
+1. Trigger a **full Dokploy redeployment / recreation** of the xpfarm.org stack (not a
+   container restart).
+2. Relay back these lines so gate 11 can be closed truthfully:
+   - the `plugin-updater` line for this plugin — decisive form:
+     `[plugin-updater] Timber Blast: installed v1.0.0` (first deploy) or
+     `already current (v1.0.0)` (subsequent);
+   - `plugin-updater`'s container **exit code** (must be `0`);
+   - confirmation Minecraft started **after** the updater finished, not concurrently;
+   - the Paper startup line `Enabling TimberBlast v1.0.0`;
+   - any exception or `SEVERE` line near either.
+3. Redact anything credential-bearing before pasting.
+
+With those, gate 11's boxes can be ticked and the `## Deployment Status` entry in
+`xpfarm-plugin-toolkit/CURRENT_STATE.md` flipped from ENROLLED BUT NOT DEPLOYED to deployed.
 
 ## 12. Handoff
 
